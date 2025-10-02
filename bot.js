@@ -291,7 +291,7 @@ client.on('guildCreate', guild => {
 });
 
 client.on('interactionCreate', async interaction => {
-  if (interaction.isChatInputCommand()) {
+  if (interaction.isChatInputCommand()) { // Handle Slash Commands
     const { commandName } = interaction;
     db.run('INSERT OR IGNORE INTO users (id) VALUES (?)', [interaction.user.id]);
 
@@ -303,7 +303,7 @@ client.on('interactionCreate', async interaction => {
           { name: '💰 Heavenly Pounds', value: `**${(row?.balance || 0).toLocaleString('en-US')}**`, inline: true },
           { name: '🪙 Gold', value: `${(row?.gold || 0).toLocaleString('en-US')}`, inline: true },
           { name: '🪵 Wood', value: `${(row?.wood || 0).toLocaleString('en-US')}`, inline: true },
-          { name: ' Food', value: `${(row?.food || 0).toLocaleString('en-US')}`, inline: true },
+          { name: '🌽 Food', value: `${(row?.food || 0).toLocaleString('en-US')}`, inline: true },
           { name: '🪨 Stone', value: `${(row?.stone || 0).toLocaleString('en-US')}`, inline: true }
         )
         .setFooter({ text: 'Note: Resources (RSS) will be granted when the temple is conquered. If the project is canceled, all resources and currency will be lost.' });
@@ -397,7 +397,7 @@ client.on('interactionCreate', async interaction => {
           streak = 1;
         }
 
-        const reward = 10 + (streak - 1);
+        const reward = 10 + streak;
 
         db.run('UPDATE users SET balance = balance + ?, last_daily = ?, daily_streak = ? WHERE id = ?', [reward, todayStr, streak, userId]);
 
@@ -519,10 +519,11 @@ client.on('interactionCreate', async interaction => {
 
       const giveawayMessage = await interaction.channel.send({ content: pingRoleId ? `<@&${pingRoleId}>` : '@here', embeds: [embed] });
       giveawayMessage.react('🎉');
-      activeGiveaways.set(giveawayMessage.id, collector);
       await interaction.reply({ content: '✅ Giveaway started!', flags: [MessageFlags.Ephemeral] });
 
       const collector = giveawayMessage.createReactionCollector({ time: durationMs });
+      activeGiveaways.set(giveawayMessage.id, collector);
+
       const participants = new Set();
 
       collector.on('collect', (reaction, user) => {
@@ -605,7 +606,7 @@ client.on('interactionCreate', async interaction => {
       interaction.reply({ content: '✅ Giveaway has been successfully canceled and the prize refunded.', flags: [MessageFlags.Ephemeral] });
       logActivity('🎁 Giveaway Canceled', `Admin <@${interaction.user.id}> canceled the giveaway (\`${messageId}\`).\n- **${prizeToRefund.toLocaleString('en-US')}** 💰 was refunded to the server pool.\n- Entry fees were refunded to all participants.`, 'Orange');
     }
-  } else if (interaction.isModalSubmit()) {
+  } else if (interaction.isModalSubmit()) { // Handle Modal Submissions
     if (interaction.customId.startsWith('buy_modal_')) {
       const resource = interaction.customId.split('_')[2];
       const quantityString = interaction.fields.getTextInputValue('hp_quantity_input');
@@ -643,7 +644,7 @@ client.on('interactionCreate', async interaction => {
         flags: [MessageFlags.Ephemeral],
       });
     }
-  } else if (interaction.isButton()) {
+  } else if (interaction.isButton()) { // Handle Button Clicks
     if (interaction.customId.startsWith('confirm_buy_')) {
       const [, , resource, costStr, resourceAmountStr] = interaction.customId.split('_');
       const cost = parseFloat(costStr);
