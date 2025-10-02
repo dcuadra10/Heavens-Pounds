@@ -1,0 +1,24 @@
+{
+  "name": "heavenly-pounds-bot",
+  "version": "1.0.0",
+  "description": "Discord bot for Heavenly Pounds currency system",
+  "main": "bot.js",
+  "scripts": {
+    "start": "node bot.js",
+    "dev": "nodemon bot.js"
+  },
+  "dependencies": {
+    "@discordjs/builders": "^1.8.2",
+    "discord.js": "^14.11.0",
+    "dotenv": "16.3.1",
+    "google-auth-library": "^9.15.1",
+    "google-spreadsheet": "^4.1.5",
+    "sqlite3": "^5.1.6"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}
