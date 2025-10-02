@@ -81,6 +81,7 @@ Koyeb is another excellent, easy-to-use platform with a free tier that doesn't r
 3.  Click "Create App", select GitHub, and choose your bot's repository.
 4.  In the "Environment variables" section, add your secrets (`DISCORD_TOKEN`, etc.).
 5.  Click "Deploy". Koyeb will build and run your bot continuously.
+6.  **Crucial Step for Database**: Go to your Service settings, find the **Volumes** section, and create a new volume with the path set to `/data`. Then, go back to **Environment variables** and add a new variable `DB_PATH` with the value `/data/database.db`. This ensures your database is not deleted on restarts.
 
 ### Option 2: AWS (Amazon Web Services) Free Tier
 

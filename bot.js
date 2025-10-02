@@ -1,5 +1,6 @@
 const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle, Events, MessageFlags } = require('discord.js');
 const db = require('./database');
+const express = require('express');
 const { GoogleSpreadsheet } = require('google-spreadsheet');
 const { JWT } = require('google-auth-library');
 require('dotenv').config();
@@ -663,5 +664,15 @@ client.on('interactionCreate', async interaction => {
     }
   }
 });
+
+// Web server to keep the bot alive on hosting platforms like Koyeb/Railway
+const app = express();
+const port = process.env.PORT || 8080;
+
+app.get('/', (req, res) => {
+  res.send('Heavenly Pounds bot is alive!');
+});
+
+app.listen(port, () => console.log(`Health check server listening on port ${port}`));
 
 client.login(process.env.DISCORD_TOKEN);
