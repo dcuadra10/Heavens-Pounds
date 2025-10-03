@@ -337,7 +337,8 @@ client.on('interactionCreate', async interaction => {
     await db.query('INSERT INTO users (id) VALUES ($1) ON CONFLICT (id) DO NOTHING', [interaction.user.id]);
 
     if (commandName === 'balance') {
-      await interaction.deferReply();
+      // Defer the reply to prevent interaction timeout
+      await interaction.deferReply(); 
       const { rows } = await db.query('SELECT * FROM users WHERE id = $1', [interaction.user.id]);
       const row = rows[0];
       const embed = new EmbedBuilder()
@@ -350,7 +351,7 @@ client.on('interactionCreate', async interaction => {
           { name: '🪨 Stone', value: `${(row?.stone || 0).toLocaleString('en-US')}`, inline: true }
         )
         .setFooter({ text: 'Note: Resources (RSS) will be granted when the temple is conquered. If the project is canceled, all resources and currency will be lost.' });
-      interaction.editReply({ embeds: [embed] });
+      await interaction.editReply({ embeds: [embed] });
     } else if (commandName === 'shop') {
     const embed = new EmbedBuilder()
       .setTitle('🛍️ Heavenly Shop')
@@ -462,7 +463,7 @@ client.on('interactionCreate', async interaction => {
         db.query('SELECT minutes, rewarded_minutes FROM voice_times WHERE user_id = $1', [user.id]),
       ];
 
-      interaction.deferReply().then(() => Promise.all(statsPromises).then(([invitesRes, boostsRes, messagesRes, voiceMinutesRes]) => {
+      Promise.all(statsPromises).then(([invitesRes, boostsRes, messagesRes, voiceMinutesRes]) => {
         const invites = invitesRes.rows[0]?.invites || 0;
         const boosts = boostsRes.rows[0]?.boosts || 0;
         const totalMessages = messagesRes.rows[0]?.count || 0;
@@ -484,7 +485,7 @@ client.on('interactionCreate', async interaction => {
             { name: '🎤 Lifetime Voice Chat', value: `**${totalVoiceMinutes}** minutes\n(${voiceProgress}/60 for next reward)` }
           );
         interaction.editReply({ embeds: [statsEmbed] });
-      }));
+      });
 
     } else if (commandName === 'leaderboard') {
     try {
@@ -521,24 +522,25 @@ client.on('interactionCreate', async interaction => {
       }
 
       embed.setDescription(description);
-      interaction.editReply({ embeds: [embed] });
+      await interaction.editReply({ embeds: [embed] });
     } catch (err) {
       console.error(err);
-        return interaction.editReply('❌ An error occurred while fetching the leaderboard.');
+        return interaction.editReply({ content: '❌ An error occurred while fetching the leaderboard.' });
       }
     } else if (commandName === 'pool') {
     const adminIds = (process.env.ADMIN_IDS || '').split(',');
     if (!adminIds.includes(interaction.user.id)) {
       return interaction.reply('🚫 You do not have permission to use this command.');
     }
-    await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
+    // Defer the reply and make it ephemeral
+    await interaction.deferReply({ ephemeral: true });
     const { rows } = await db.query('SELECT pool_balance FROM server_stats WHERE id = $1', [interaction.guildId]);
       const poolBalance = rows[0]?.pool_balance || 0;
       const embed = new EmbedBuilder()
         .setTitle('🏦 Server Pool Balance')
         .setDescription(`The server pool currently holds **${poolBalance.toLocaleString('en-US')}** 💰.`)
         .setColor('Aqua');
-      interaction.reply({ embeds: [embed], flags: [MessageFlags.Ephemeral] });
+      await interaction.editReply({ embeds: [embed] });
     } else if (commandName === 'giveaway') {
     await interaction.deferReply({ ephemeral: true });
     const adminIds = (process.env.ADMIN_IDS || '').split(',');
@@ -666,7 +668,7 @@ client.on('interactionCreate', async interaction => {
       const row = new ActionRowBuilder()
         .addComponents(
           new ButtonBuilder().setCustomId(`confirm_buy_${resource}_${cost}_${desiredResourceAmount}`).setLabel('Confirm').setStyle(ButtonStyle.Success),
-          new ButtonBuilder().setCustomId('cancel_buy').setLabel('Cancel').setStyle(ButtonStyle.Danger)
+          new ButtonBuilder().setCustomId('cancel_buy').setLabel('Cancel').setStyle(ButtonStyle.Danger),
         );
 
       await interaction.reply({
@@ -676,6 +678,7 @@ client.on('interactionCreate', async interaction => {
       });
     }
   } else if (interaction.isButton()) { // Handle Button Clicks
+    await interaction.deferUpdate(); // Acknowledge the button click immediately
     if (interaction.customId.startsWith('confirm_buy_')) {
       const [, , resource, costStr, resourceAmountStr] = interaction.customId.split('_');
       const cost = parseFloat(costStr);
@@ -683,15 +686,15 @@ client.on('interactionCreate', async interaction => {
 
     const { rows: userRows } = await db.query('SELECT balance FROM users WHERE id = $1', [interaction.user.id]);
       if ((userRows[0]?.balance || 0) < cost) {
-          return interaction.update({ content: `❌ Oops! You no longer have enough Heavenly Pounds.`, embeds: [], components: [] });
+          return interaction.editReply({ content: `❌ Oops! You no longer have enough Heavenly Pounds.`, embeds: [], components: [] });
         }
       await db.query(`UPDATE users SET balance = balance - $1, ${resource} = ${resource} + $2 WHERE id = $3`, [cost, resourceAmount, interaction.user.id]);
       await db.query('UPDATE server_stats SET pool_balance = pool_balance + $1 WHERE id = $2', [cost, interaction.guildId]);
-        interaction.update({ content: `✅ Success! You spent **${cost.toLocaleString('en-US')}** 💰 and received **${resourceAmount.toLocaleString('en-US')} ${resource}**!`, embeds: [], components: [] });
+        await interaction.editReply({ content: `✅ Success! You spent **${cost.toLocaleString('en-US')}** 💰 and received **${resourceAmount.toLocaleString('en-US')} ${resource}**!`, embeds: [], components: [] });
         logActivity('🛒 Shop Purchase', `<@${interaction.user.id}> bought **${resourceAmount.toLocaleString('en-US')} ${resource}** for **${cost.toLocaleString('en-US')}** Heavenly Pounds.`, 'Blue')
           .then(() => logPurchaseToSheet(interaction.user.username, resource, resourceAmount, cost));
     } else if (interaction.customId === 'cancel_buy') {
-      await interaction.update({ content: 'Purchase canceled.', embeds: [], components: [] });
+      await interaction.editReply({ content: 'Purchase canceled.', embeds: [], components: [] });
     }
   }
 });
