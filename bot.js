@@ -576,22 +576,29 @@ client.on('interactionCreate', async interaction => {
       const participants = new Set();
       activeGiveaways.set(giveawayMessage.id, { collector, prize, entryCost, participants });
 
-      collector.on('collect', (reaction, user) => {
+      collector.on('collect', async (reaction, user) => {
         if (user.bot) return;
 
-        db.query('SELECT balance FROM users WHERE id = $1', [user.id]).then(({ rows: userRows }) => {
+        try {
+          const { rows: userRows } = await db.query('SELECT balance FROM users WHERE id = $1', [user.id]);
+          
           if ((userRows[0]?.balance || 0) < entryCost) {
-            reaction.users.remove(user.id);
-            user.send(`❌ You don't have enough Heavenly Pounds to enter this giveaway. It costs **${entryCost}** 💰 to join.`).catch(() => {});
+            reaction.users.remove(user.id).catch(err => console.error('Failed to remove reaction:', err));
+            user.send(`❌ You don't have enough Heavenly Pounds to enter this giveaway. It costs **${entryCost}** 💰 to join.`).catch(() => {
+              console.log(`Could not DM user ${user.id}. They might have DMs disabled.`);
+            });
             return;
           }
 
           if (!participants.has(user.id)) {
-            db.query('UPDATE users SET balance = balance - $1 WHERE id = $2', [entryCost, user.id]);
-            db.query('UPDATE server_stats SET pool_balance = pool_balance + $1 WHERE id = $2', [entryCost, interaction.guildId]);
+            await db.query('UPDATE users SET balance = balance - $1 WHERE id = $2', [entryCost, user.id]);
+            await db.query('UPDATE server_stats SET pool_balance = pool_balance + $1 WHERE id = $2', [entryCost, interaction.guildId]);
             participants.add(user.id);
           }
-        });
+        } catch (error) {
+            console.error('Error during giveaway collection:', error);
+            reaction.users.remove(user.id).catch(err => console.error('Failed to remove reaction on error:', err));
+        }
       });
 
       collector.on('end', async (collected, reason) => {
