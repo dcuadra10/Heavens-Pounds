@@ -1,6 +1,10 @@
 const { Pool } = require('pg');
 require('dotenv').config();
 
+if (!process.env.DATABASE_URL) {
+  throw new Error('FATAL ERROR: DATABASE_URL environment variable is not set. Please set it in your hosting provider (e.g., Koyeb).');
+}
+
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
 });
@@ -25,20 +29,18 @@ async function initializeDatabase() {
     // Message count for rewards
     await client.query(`
       CREATE TABLE IF NOT EXISTS message_counts (
-        user_id TEXT,
-        count INTEGER DEFAULT 0,
-        last_reset DATE DEFAULT CURRENT_DATE,
-        PRIMARY KEY (user_id, last_reset)
+        user_id TEXT PRIMARY KEY,
+        count BIGINT DEFAULT 0,
+        rewarded_messages BIGINT DEFAULT 0
       )
     `);
 
     // Voice time in minutes
     await client.query(`
       CREATE TABLE IF NOT EXISTS voice_times (
-        user_id TEXT,
-        minutes INTEGER DEFAULT 0,
-        last_reset DATE DEFAULT CURRENT_DATE,
-        PRIMARY KEY (user_id, last_reset)
+        user_id TEXT PRIMARY KEY,
+        minutes BIGINT DEFAULT 0,
+        rewarded_minutes BIGINT DEFAULT 0
       )
     `);
 

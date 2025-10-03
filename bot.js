@@ -216,18 +216,26 @@ client.on('guildMemberAdd', async member => {
 client.on('messageCreate', async message => {
   if (message.author.bot) return;
   await db.query('INSERT INTO users (id) VALUES ($1) ON CONFLICT (id) DO NOTHING', [message.author.id]);
-  await db.query(`
-    INSERT INTO message_counts (user_id, count, last_reset) 
-    VALUES ($1, 1, CURRENT_DATE) 
-    ON CONFLICT (user_id, last_reset) 
-    DO UPDATE SET count = message_counts.count + 1
+
+  // Increment total message count
+  const { rows } = await db.query(`
+      INSERT INTO message_counts (user_id, count, rewarded_messages) 
+      VALUES ($1, 1, 0) 
+      ON CONFLICT (user_id) 
+      DO UPDATE SET count = message_counts.count + 1
+      RETURNING count, rewarded_messages
   `, [message.author.id]);
-  // Check for reward
-  const { rows } = await db.query('SELECT count FROM message_counts WHERE user_id = $1 AND last_reset = CURRENT_DATE', [message.author.id]);
-    if (rows[0] && rows[0].count % 100 === 0) {
-      await db.query('UPDATE users SET balance = balance + 20 WHERE id = $1', [message.author.id]);
-      logActivity('💬 Message Reward', `<@${message.author.id}> received **20** Heavenly Pounds for sending 100 messages.`, 'Green');
-    }
+
+  const { count, rewarded_messages } = rows[0];
+  const unrewardedCount = count - rewarded_messages;
+  
+  if (unrewardedCount >= 100) {
+      const rewardsToGive = Math.floor(unrewardedCount / 100);
+      const totalReward = rewardsToGive * 20;
+      await db.query('UPDATE users SET balance = balance + $1 WHERE id = $2', [totalReward, message.author.id]);
+      await db.query('UPDATE message_counts SET rewarded_messages = rewarded_messages + $1 WHERE user_id = $2', [rewardsToGive * 100, message.author.id]);
+      logActivity('💬 Message Reward', `<@${message.author.id}> received **${totalReward}** Heavenly Pounds for sending ${rewardsToGive * 100} messages.`, 'Green');
+  }
 });
 
 client.on('voiceStateUpdate', async (oldState, newState) => {
@@ -237,24 +245,29 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
   if (oldState.channelId && !newState.channelId) { // left
     const start = voiceTimes.get(member.id);
     if (start) {
-      const minutes = Math.floor((Date.now() - start) / 60000);
+      const minutesInSession = Math.floor((Date.now() - start) / 60000);
       voiceTimes.delete(member.id);
-      await db.query(`
-        INSERT INTO voice_times (user_id, minutes, last_reset) 
-        VALUES ($1, $2, CURRENT_DATE) 
-        ON CONFLICT (user_id, last_reset) 
-        DO UPDATE SET minutes = voice_times.minutes + $2
-      `, [member.id, minutes]);
-      // Reward every 60 minutes
-      const { rows } = await db.query('SELECT minutes FROM voice_times WHERE user_id = $1 AND last_reset = CURRENT_DATE', [member.id]);
-        if (rows[0]) {
-          const totalMinutes = rows[0].minutes;
-          const rewards = Math.floor(totalMinutes / 60) - Math.floor((totalMinutes - minutes) / 60);
-          if (rewards > 0) {
-            await db.query('UPDATE users SET balance = balance + $1 WHERE id = $2', [rewards * 20, member.id]);
-            logActivity('🎤 Voice Chat Reward', `<@${member.id}> received **${rewards * 20}** Heavenly Pounds for spending time in voice chat.`, 'Green');
-          }
+
+      if (minutesInSession > 0) {
+        const { rows } = await db.query(`
+          INSERT INTO voice_times (user_id, minutes, rewarded_minutes)
+          VALUES ($1, $2, 0)
+          ON CONFLICT (user_id)
+          DO UPDATE SET minutes = voice_times.minutes + $2
+          RETURNING minutes, rewarded_minutes
+        `, [member.id, minutesInSession]);
+
+        const { minutes, rewarded_minutes } = rows[0];
+        const unrewardedMinutes = minutes - rewarded_minutes;
+
+        if (unrewardedMinutes >= 60) {
+          const rewardsToGive = Math.floor(unrewardedMinutes / 60);
+          const totalReward = rewardsToGive * 20;
+          await db.query('UPDATE users SET balance = balance + $1 WHERE id = $2', [totalReward, member.id]);
+          await db.query('UPDATE voice_times SET rewarded_minutes = rewarded_minutes + $1 WHERE user_id = $2', [rewardsToGive * 60, member.id]);
+          logActivity('🎤 Voice Chat Reward', `<@${member.id}> received **${totalReward}** Heavenly Pounds for spending ${rewardsToGive * 60} minutes in voice chat.`, 'Green');
         }
+      }
     }
   } else if (!oldState.channelId && newState.channelId) { // joined
     voiceTimes.set(member.id, Date.now());
@@ -423,15 +436,20 @@ client.on('interactionCreate', async interaction => {
       const statsPromises = [
         db.query('SELECT invites FROM invites WHERE user_id = $1', [user.id]),
         db.query('SELECT boosts FROM boosts WHERE user_id = $1', [user.id]),
-        db.query('SELECT count FROM message_counts WHERE user_id = $1 AND last_reset = CURRENT_DATE', [user.id]),
-        db.query('SELECT minutes FROM voice_times WHERE user_id = $1 AND last_reset = CURRENT_DATE', [user.id]),
+        db.query('SELECT count, rewarded_messages FROM message_counts WHERE user_id = $1', [user.id]),
+        db.query('SELECT minutes, rewarded_minutes FROM voice_times WHERE user_id = $1', [user.id]),
       ];
 
       Promise.all(statsPromises).then(([invitesRes, boostsRes, messagesRes, voiceMinutesRes]) => {
         const invites = invitesRes.rows[0]?.invites || 0;
         const boosts = boostsRes.rows[0]?.boosts || 0;
-        const messages = messagesRes.rows[0]?.count || 0;
-        const voiceMinutes = voiceMinutesRes.rows[0]?.minutes || 0;
+        const totalMessages = messagesRes.rows[0]?.count || 0;
+        const rewardedMessages = messagesRes.rows[0]?.rewarded_messages || 0;
+        const totalVoiceMinutes = voiceMinutesRes.rows[0]?.minutes || 0;
+        const rewardedVoiceMinutes = voiceMinutesRes.rows[0]?.rewarded_minutes || 0;
+
+        const messageProgress = ((totalMessages - rewardedMessages) % 100);
+        const voiceProgress = ((totalVoiceMinutes - rewardedVoiceMinutes) % 60);
 
         const statsEmbed = new EmbedBuilder()
           .setTitle(`📈 Stats for ${user.username}`)
@@ -440,8 +458,8 @@ client.on('interactionCreate', async interaction => {
           .addFields(
             { name: '💌 Invites', value: `**${invites}** total`, inline: true },
             { name: '🚀 Server Boosts', value: `**${boosts}** total`, inline: true },
-            { name: '💬 Messages (Today)', value: `**${messages}** sent`, inline: true },
-            { name: '🎤 Voice Chat (Today)', value: `**${voiceMinutes}** minutes`, inline: true }
+            { name: '💬 Lifetime Messages', value: `**${totalMessages.toLocaleString('en-US')}** sent\n(${messageProgress}/100 for next reward)` },
+            { name: '🎤 Lifetime Voice Chat', value: `**${totalVoiceMinutes}** minutes\n(${voiceProgress}/60 for next reward)` }
           );
         interaction.reply({ embeds: [statsEmbed] });
       });
