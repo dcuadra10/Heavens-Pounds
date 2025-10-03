@@ -337,7 +337,8 @@ client.on('interactionCreate', async interaction => {
     await db.query('INSERT INTO users (id) VALUES ($1) ON CONFLICT (id) DO NOTHING', [interaction.user.id]);
 
     if (commandName === 'balance') {
-    const { rows } = await db.query('SELECT * FROM users WHERE id = $1', [interaction.user.id]);
+      await interaction.deferReply();
+      const { rows } = await db.query('SELECT * FROM users WHERE id = $1', [interaction.user.id]);
       const row = rows[0];
       const embed = new EmbedBuilder()
         .setTitle(`📊 Balance of ${interaction.user.username}`)
@@ -349,7 +350,7 @@ client.on('interactionCreate', async interaction => {
           { name: '🪨 Stone', value: `${(row?.stone || 0).toLocaleString('en-US')}`, inline: true }
         )
         .setFooter({ text: 'Note: Resources (RSS) will be granted when the temple is conquered. If the project is canceled, all resources and currency will be lost.' });
-      interaction.reply({ embeds: [embed] });
+      interaction.editReply({ embeds: [embed] });
     } else if (commandName === 'shop') {
     const embed = new EmbedBuilder()
       .setTitle('🛍️ Heavenly Shop')
@@ -405,6 +406,7 @@ client.on('interactionCreate', async interaction => {
         );
       interaction.reply({ embeds: [helpEmbed] });
     }  else if (commandName === 'daily') {
+      await interaction.deferReply();
       const userId = interaction.user.id;
       const today = new Date();
       const todayStr = today.toISOString().slice(0, 10); // YYYY-MM-DD
@@ -444,11 +446,11 @@ client.on('interactionCreate', async interaction => {
           .setTitle('🎉 Daily Reward Claimed! 🎉')
           .setDescription(`You have received **${reward}** 💰!\nYour current streak is **${streak}** day(s). Come back tomorrow to increase it!`)
           .setColor('Gold');
-        interaction.reply({ embeds: [replyEmbed] });
+        interaction.editReply({ embeds: [replyEmbed] });
         logActivity('🎁 Daily Reward', `<@${userId}> claimed their daily reward of **${reward}** 💰 (Streak: ${streak}).`, 'Aqua');
       } catch (err) {
         console.error(err);
-          return interaction.reply({ content: '❌ An error occurred while processing your daily reward.', flags: [MessageFlags.Ephemeral] });
+          return interaction.editReply({ content: '❌ An error occurred while processing your daily reward.' });
         }
     } else if (commandName === 'stats') {
       const user = interaction.options.getUser('user') || interaction.user;
@@ -460,7 +462,7 @@ client.on('interactionCreate', async interaction => {
         db.query('SELECT minutes, rewarded_minutes FROM voice_times WHERE user_id = $1', [user.id]),
       ];
 
-      Promise.all(statsPromises).then(([invitesRes, boostsRes, messagesRes, voiceMinutesRes]) => {
+      interaction.deferReply().then(() => Promise.all(statsPromises).then(([invitesRes, boostsRes, messagesRes, voiceMinutesRes]) => {
         const invites = invitesRes.rows[0]?.invites || 0;
         const boosts = boostsRes.rows[0]?.boosts || 0;
         const totalMessages = messagesRes.rows[0]?.count || 0;
@@ -481,11 +483,12 @@ client.on('interactionCreate', async interaction => {
             { name: '💬 Lifetime Messages', value: `**${totalMessages.toLocaleString('en-US')}** sent\n(${messageProgress}/100 for next reward)` },
             { name: '🎤 Lifetime Voice Chat', value: `**${totalVoiceMinutes}** minutes\n(${voiceProgress}/60 for next reward)` }
           );
-        interaction.reply({ embeds: [statsEmbed] });
-      });
+        interaction.editReply({ embeds: [statsEmbed] });
+      }));
 
     } else if (commandName === 'leaderboard') {
     try {
+      await interaction.deferReply();
       const { rows: allUsers } = await db.query('SELECT id, balance FROM users ORDER BY balance DESC');
 
       const top10Users = allUsers.slice(0, 10);
@@ -518,16 +521,17 @@ client.on('interactionCreate', async interaction => {
       }
 
       embed.setDescription(description);
-      interaction.reply({ embeds: [embed] });
+      interaction.editReply({ embeds: [embed] });
     } catch (err) {
       console.error(err);
-        return interaction.reply('❌ An error occurred while fetching the leaderboard.');
+        return interaction.editReply('❌ An error occurred while fetching the leaderboard.');
       }
     } else if (commandName === 'pool') {
     const adminIds = (process.env.ADMIN_IDS || '').split(',');
     if (!adminIds.includes(interaction.user.id)) {
       return interaction.reply('🚫 You do not have permission to use this command.');
     }
+    await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
     const { rows } = await db.query('SELECT pool_balance FROM server_stats WHERE id = $1', [interaction.guildId]);
       const poolBalance = rows[0]?.pool_balance || 0;
       const embed = new EmbedBuilder()
@@ -536,9 +540,10 @@ client.on('interactionCreate', async interaction => {
         .setColor('Aqua');
       interaction.reply({ embeds: [embed], flags: [MessageFlags.Ephemeral] });
     } else if (commandName === 'giveaway') {
+    await interaction.deferReply({ ephemeral: true });
     const adminIds = (process.env.ADMIN_IDS || '').split(',');
     if (!adminIds.includes(interaction.user.id)) {
-      return interaction.reply('🚫 You do not have permission to use this command.');
+      return interaction.editReply('🚫 You do not have permission to use this command.');
     }
 
     const durationString = interaction.options.getString('duration');
@@ -555,7 +560,7 @@ client.on('interactionCreate', async interaction => {
     const { rows } = await db.query('SELECT pool_balance FROM server_stats WHERE id = $1', [interaction.guildId]);
       const poolBalance = rows[0]?.pool_balance || 0;
       if (prize > poolBalance) {
-        return interaction.reply(`❌ Not enough funds in the server pool! The pool only has **${poolBalance.toLocaleString('en-US')}** 💰.`);
+        return interaction.editReply(`❌ Not enough funds in the server pool! The pool only has **${poolBalance.toLocaleString('en-US')}** 💰.`);
       }
 
       // Deduct from pool
@@ -570,7 +575,7 @@ client.on('interactionCreate', async interaction => {
 
       const giveawayMessage = await interaction.channel.send({ content: pingRoleId ? `<@&${pingRoleId}>` : '@here', embeds: [embed] });
       giveawayMessage.react('🎉');
-      await interaction.reply({ content: '✅ Giveaway started!', flags: [MessageFlags.Ephemeral] });
+      await interaction.editReply({ content: '✅ Giveaway started!' });
 
       const collector = giveawayMessage.createReactionCollector({ time: durationMs });
       const participants = new Set();
@@ -579,12 +584,18 @@ client.on('interactionCreate', async interaction => {
       collector.on('collect', async (reaction, user) => {
         if (user.bot) return;
 
+        const adminIds = (process.env.ADMIN_IDS || '').split(',');
+        const isUserAdmin = adminIds.includes(user.id);
+
         try {
           const { rows: userRows } = await db.query('SELECT balance FROM users WHERE id = $1', [user.id]);
           
           if ((userRows[0]?.balance || 0) < entryCost) {
-            reaction.users.remove(user.id).catch(err => console.error('Failed to remove reaction:', err));
-            user.send(`❌ You don't have enough Heavenly Pounds to enter this giveaway. It costs **${entryCost}** 💰 to join.`).catch(() => {
+            // Don't try to remove reaction from an admin, just DM them.
+            if (!isUserAdmin) {
+              reaction.users.remove(user.id).catch(err => console.error('Failed to remove reaction:', err));
+            }
+            user.send(`❌ You don't have enough Heavenly Pounds to enter this giveaway. It costs **${entryCost.toLocaleString('en-US')}** 💰 to join.`).catch(() => {
               console.log(`Could not DM user ${user.id}. They might have DMs disabled.`);
             });
             return;
