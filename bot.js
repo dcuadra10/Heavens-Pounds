@@ -255,7 +255,6 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
             logActivity('🎤 Voice Chat Reward', `<@${member.id}> received **${rewards * 20}** Heavenly Pounds for spending time in voice chat.`, 'Green');
           }
         }
-      });
     }
   } else if (!oldState.channelId && newState.channelId) { // joined
     voiceTimes.set(member.id, Date.now());
