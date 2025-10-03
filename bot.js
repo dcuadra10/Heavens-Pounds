@@ -424,7 +424,7 @@ client.on('interactionCreate', async interaction => {
           const tomorrow = new Date(today);
           tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
           tomorrow.setUTCHours(0, 0, 0, 0);
-          return interaction.reply({ content: `You have already claimed your daily reward today! Please come back <t:${Math.floor(tomorrow.getTime() / 1000)}:R>.`, flags: [MessageFlags.Ephemeral] });
+          return interaction.editReply({ content: `You have already claimed your daily reward today! Please come back <t:${Math.floor(tomorrow.getTime() / 1000)}:R>.`, ephemeral: true });
         }
 
         const yesterday = new Date(today);
@@ -447,7 +447,7 @@ client.on('interactionCreate', async interaction => {
           .setTitle('🎉 Daily Reward Claimed! 🎉')
           .setDescription(`You have received **${reward}** 💰!\nYour current streak is **${streak}** day(s). Come back tomorrow to increase it!`)
           .setColor('Gold');
-        interaction.editReply({ embeds: [replyEmbed] });
+        await interaction.editReply({ embeds: [replyEmbed] });
         logActivity('🎁 Daily Reward', `<@${userId}> claimed their daily reward of **${reward}** 💰 (Streak: ${streak}).`, 'Aqua');
       } catch (err) {
         console.error(err);
@@ -597,9 +597,11 @@ client.on('interactionCreate', async interaction => {
             if (!isUserAdmin) {
               reaction.users.remove(user.id).catch(err => console.error('Failed to remove reaction:', err));
             }
-            user.send(`❌ You don't have enough Heavenly Pounds to enter this giveaway. It costs **${entryCost.toLocaleString('en-US')}** 💰 to join.`).catch(() => {
-              console.log(`Could not DM user ${user.id}. They might have DMs disabled.`);
-            });
+            if (!user.bot) {
+              user.send(`❌ You don't have enough Heavenly Pounds to enter this giveaway. It costs **${entryCost.toLocaleString('en-US')}** 💰 to join.`).catch(() => {
+                console.log(`Could not DM user ${user.id}. They might have DMs disabled.`);
+              });
+            }
             return;
           }
 
