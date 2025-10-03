@@ -228,7 +228,6 @@ client.on('messageCreate', async message => {
       await db.query('UPDATE users SET balance = balance + 20 WHERE id = $1', [message.author.id]);
       logActivity('💬 Message Reward', `<@${message.author.id}> received **20** Heavenly Pounds for sending 100 messages.`, 'Green');
     }
-  });
 });
 
 client.on('voiceStateUpdate', async (oldState, newState) => {
