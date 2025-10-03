@@ -424,7 +424,7 @@ client.on('interactionCreate', async interaction => {
           const tomorrow = new Date(today);
           tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
           tomorrow.setUTCHours(0, 0, 0, 0);
-          return interaction.editReply({ content: `You have already claimed your daily reward today! Please come back <t:${Math.floor(tomorrow.getTime() / 1000)}:R>.`, ephemeral: true });
+          return interaction.editReply({ content: `You have already claimed your daily reward today! Please come back <t:${Math.floor(tomorrow.getTime() / 1000)}:R>.` });
         }
 
         const yesterday = new Date(today);
@@ -454,6 +454,14 @@ client.on('interactionCreate', async interaction => {
           return interaction.editReply({ content: '❌ An error occurred while processing your daily reward.' });
         }
     } else if (commandName === 'stats') {
+      await interaction.deferReply();
+      const targetUser = interaction.options.getUser('user');
+      const adminIds = (process.env.ADMIN_IDS || '').split(',');
+      const isUserAdmin = adminIds.includes(interaction.user.id);
+
+      if (targetUser && targetUser.id !== interaction.user.id && !isUserAdmin) {
+        return interaction.editReply({ content: '🚫 You can only view your own stats. Only admins can view stats for other users.'});
+      }
       const user = interaction.options.getUser('user') || interaction.user;
 
       const statsPromises = [
@@ -533,7 +541,7 @@ client.on('interactionCreate', async interaction => {
       return interaction.reply('🚫 You do not have permission to use this command.');
     }
     // Defer the reply and make it ephemeral
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
     const { rows } = await db.query('SELECT pool_balance FROM server_stats WHERE id = $1', [interaction.guildId]);
       const poolBalance = rows[0]?.pool_balance || 0;
       const embed = new EmbedBuilder()
@@ -542,7 +550,7 @@ client.on('interactionCreate', async interaction => {
         .setColor('Aqua');
       await interaction.editReply({ embeds: [embed] });
     } else if (commandName === 'giveaway') {
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
     const adminIds = (process.env.ADMIN_IDS || '').split(',');
     if (!adminIds.includes(interaction.user.id)) {
       return interaction.editReply('🚫 You do not have permission to use this command.');
