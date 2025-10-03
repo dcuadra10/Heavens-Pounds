@@ -310,6 +310,27 @@ client.on('guildCreate', async (guild) => {
   }
 });
 
+client.on('messageDelete', async (message) => {
+  // Check if the deleted message was an active giveaway
+  if (activeGiveaways.has(message.id)) {
+    const { collector, prize, entryCost, participants } = activeGiveaways.get(message.id);
+
+    // Stop the giveaway
+    collector.stop('deleted');
+    activeGiveaways.delete(message.id);
+
+    // Refund the main prize to the server pool
+    await db.query('UPDATE server_stats SET pool_balance = pool_balance + $1 WHERE id = $2', [prize, message.guildId]);
+
+    // Refund entry fees to all participants
+    participants.forEach(userId => {
+      db.query('UPDATE users SET balance = balance + $1 WHERE id = $2', [entryCost, userId]);
+    });
+
+    logActivity('🎁 Giveaway Canceled', `The giveaway message (\`${message.id}\`) was deleted. The prize has been refunded to the pool and entry fees returned to participants.`, 'Orange');
+  }
+});
+
 client.on('interactionCreate', async interaction => {
   if (interaction.isChatInputCommand()) { // Handle Slash Commands
     const { commandName } = interaction;
@@ -552,9 +573,8 @@ client.on('interactionCreate', async interaction => {
       await interaction.reply({ content: '✅ Giveaway started!', flags: [MessageFlags.Ephemeral] });
 
       const collector = giveawayMessage.createReactionCollector({ time: durationMs });
-      activeGiveaways.set(giveawayMessage.id, collector);
-
       const participants = new Set();
+      activeGiveaways.set(giveawayMessage.id, { collector, prize, entryCost, participants });
 
       collector.on('collect', (reaction, user) => {
         if (user.bot) return;
@@ -562,7 +582,7 @@ client.on('interactionCreate', async interaction => {
         db.query('SELECT balance FROM users WHERE id = $1', [user.id]).then(({ rows: userRows }) => {
           if ((userRows[0]?.balance || 0) < entryCost) {
             reaction.users.remove(user.id);
-            user.send(`❌ You don't have enough Heavenly Pounds to enter the giveaway. You need **${entryCost}** 💰.`).catch(() => {});
+            user.send(`❌ You don't have enough Heavenly Pounds to enter this giveaway. It costs **${entryCost}** 💰 to join.`).catch(() => {});
             return;
           }
 
@@ -574,8 +594,12 @@ client.on('interactionCreate', async interaction => {
         });
       });
 
-      collector.on('end', async collected => {
+      collector.on('end', async (collected, reason) => {
         activeGiveaways.delete(giveawayMessage.id);
+
+        // If the giveaway was stopped because the message was deleted, do nothing here.
+        if (reason === 'deleted') return;
+
         const winnerIds = Array.from(participants);
 
         if (winnerIds.length === 0) {
@@ -594,46 +618,6 @@ client.on('interactionCreate', async interaction => {
 
         interaction.channel.send(`Congratulations to ${winners.map(id => `<@${id}>`).join(', ')}! You've each won **${prizePerWinner.toLocaleString('en-US')}** 💰!`);
       });
-    } else if (commandName === 'giveaway-end') {
-      const adminIds = (process.env.ADMIN_IDS || '').split(',');
-      if (!adminIds.includes(interaction.user.id)) {
-        return interaction.reply('🚫 You do not have permission to use this command.');
-      }
-
-      const messageId = interaction.options.getString('message_id');
-      const collector = activeGiveaways.get(messageId);
-
-      if (!collector) {
-        return interaction.reply({ content: '❌ No active giveaway found with that message ID.', flags: [MessageFlags.Ephemeral] });
-      }
-
-      const prizeToRefund = parseShorthand(interaction.options.getString('prize_to_refund'));
-      const entryCost = collector.options.entryCost || 0;
-
-      // Stop the collector
-      collector.stop();
-      activeGiveaways.delete(messageId);
-
-      // Refund the prize
-      await db.query('UPDATE server_stats SET pool_balance = pool_balance + $1 WHERE id = $2', [prizeToRefund, interaction.guildId]);
-
-      // Edit the original message
-      const giveawayChannel = await client.channels.fetch(collector.channel.id);
-      const giveawayMessage = await giveawayChannel.messages.fetch(messageId);
-      const canceledEmbed = EmbedBuilder.from(giveawayMessage.embeds[0]).setTitle('🎉 GIVEAWAY CANCELED 🎉').setDescription('This giveaway was canceled by an admin.').setColor('Red');
-      await giveawayMessage.edit({ embeds: [canceledEmbed], components: [] });
-
-      // Refund entry fees to participants
-      if (entryCost > 0) {
-        const reactions = giveawayMessage.reactions.cache.get('🎉');
-        const users = await reactions.users.fetch();
-        users.filter(user => !user.bot).forEach(user => {
-          db.query('UPDATE users SET balance = balance + $1 WHERE id = $2', [entryCost, user.id]);
-        });
-      }
-
-      interaction.reply({ content: '✅ Giveaway has been successfully canceled and the prize refunded.', flags: [MessageFlags.Ephemeral] });
-      logActivity('🎁 Giveaway Canceled', `Admin <@${interaction.user.id}> canceled the giveaway (\`${messageId}\`).\n- **${prizeToRefund.toLocaleString('en-US')}** 💰 was refunded to the server pool.\n- Entry fees were refunded to all participants.`, 'Orange');
     }
   } else if (interaction.isModalSubmit()) { // Handle Modal Submissions
     if (interaction.customId.startsWith('buy_modal_')) {

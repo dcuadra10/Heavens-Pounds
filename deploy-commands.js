@@ -77,20 +77,6 @@ const commands = [
         .setRequired(false)
         .setMinValue(0)
     ),
-  
-  new SlashCommandBuilder()
-    .setName('giveaway-end')
-    .setDescription('Admin: Cancel an active giveaway and refund the prize')
-    .addStringOption(option =>
-      option.setName('message_id')
-        .setDescription('The message ID of the giveaway to cancel')
-        .setRequired(true)
-    )
-    .addStringOption(option =>
-      option.setName('prize_to_refund')
-        .setDescription('The exact prize amount to refund to the pool')
-        .setRequired(true)
-    ),
 ].map(command => command.toJSON());
 
 const rest = new REST({ version: '9' }).setToken(process.env.DISCORD_TOKEN);
