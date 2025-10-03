@@ -606,10 +606,22 @@ client.on('interactionCreate', async interaction => {
             reaction.users.remove(user.id).catch(err => console.error('Failed to remove reaction:', err));
             const giveawayData = activeGiveaways.get(reaction.message.id);
             if (giveawayData?.interaction) {
-              await giveawayData.interaction.followUp({
-                content: `❌ You don't have enough Heavenly Pounds to enter this giveaway. It costs **${currentEntryCost.toLocaleString('en-US')}** 💰 to join.`,
-                ephemeral: true
-              }).catch(err => console.error('Failed to send ephemeral message:', err));
+              try {
+                await giveawayData.interaction.followUp({
+                  content: `❌ No tienes suficientes Heavenly Pounds para entrar al giveaway. Cuesta **${currentEntryCost.toLocaleString('en-US')}** 💰 unirse.`,
+                  ephemeral: true
+                });
+              } catch (err) {
+                console.error('Failed to send ephemeral message, falling back to DM:', err);
+                user.send(`❌ No tienes suficientes Heavenly Pounds para entrar al giveaway. Cuesta **${currentEntryCost.toLocaleString('en-US')}** 💰 unirse.`).catch(() => {
+                  console.log(`Could not DM user ${user.id}.`);
+                });
+              }
+            } else {
+              // Fallback to DM if no interaction
+              user.send(`❌ No tienes suficientes Heavenly Pounds para entrar al giveaway. Cuesta **${currentEntryCost.toLocaleString('en-US')}** 💰 unirse.`).catch(() => {
+                console.log(`Could not DM user ${user.id}.`);
+              });
             }
             return;
           }
