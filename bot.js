@@ -284,7 +284,6 @@ client.on('guildMemberUpdate', async (oldMember, newMember) => {
         
         logActivity('🚀 Server Boost Reward', `<@${newMember.id}> received **${reward}** Heavenly Pounds for **${newBoosts}** new boost(s).`, 'Gold');
       }
-    });
   }
 });
 
