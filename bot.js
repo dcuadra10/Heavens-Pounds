@@ -206,20 +206,26 @@ client.on('guildMemberAdd', async member => {
   });
   if (inviterId && inviterId !== member.id) { // avoid self
     db.run('INSERT OR IGNORE INTO users (id) VALUES (?)', [inviterId]);
-    db.run('UPDATE users SET balance = balance + 80 WHERE id = ?', [inviterId]);
-    db.run('INSERT OR REPLACE INTO invites (user_id, invites) VALUES (?, COALESCE((SELECT invites FROM invites WHERE user_id = ?), 0) + 1)', [inviterId, inviterId]);
+    await db.query('INSERT INTO users (id) VALUES ($1) ON CONFLICT (id) DO NOTHING', [inviterId]);
+    await db.query('UPDATE users SET balance = balance + 80 WHERE id = $1', [inviterId]);
+    await db.query('INSERT INTO invites (user_id, invites) VALUES ($1, 1) ON CONFLICT (user_id) DO UPDATE SET invites = invites.invites + 1', [inviterId]);
     logActivity('💌 Invite Reward', `<@${inviterId}> received **80** Heavenly Pounds for inviting ${member.user.tag}.`, 'Green');
   }
 });
 
 client.on('messageCreate', async message => {
   if (message.author.bot) return;
-  db.run('INSERT OR IGNORE INTO users (id) VALUES (?)', [message.author.id]);
-  db.run('INSERT OR REPLACE INTO message_counts (user_id, count, last_reset) VALUES (?, COALESCE((SELECT count FROM message_counts WHERE user_id = ? AND last_reset = CURRENT_DATE), 0) + 1, CURRENT_DATE)', [message.author.id, message.author.id]);
+  await db.query('INSERT INTO users (id) VALUES ($1) ON CONFLICT (id) DO NOTHING', [message.author.id]);
+  await db.query(`
+    INSERT INTO message_counts (user_id, count, last_reset) 
+    VALUES ($1, 1, CURRENT_DATE) 
+    ON CONFLICT (user_id, last_reset) 
+    DO UPDATE SET count = message_counts.count + 1
+  `, [message.author.id]);
   // Check for reward
-  db.get('SELECT count FROM message_counts WHERE user_id = ? AND last_reset = CURRENT_DATE', [message.author.id], (err, row) => {
-    if (row && row.count % 100 === 0) {
-      db.run('UPDATE users SET balance = balance + 20 WHERE id = ?', [message.author.id]);
+  const { rows } = await db.query('SELECT count FROM message_counts WHERE user_id = $1 AND last_reset = CURRENT_DATE', [message.author.id]);
+    if (rows[0] && rows[0].count % 100 === 0) {
+      await db.query('UPDATE users SET balance = balance + 20 WHERE id = $1', [message.author.id]);
       logActivity('💬 Message Reward', `<@${message.author.id}> received **20** Heavenly Pounds for sending 100 messages.`, 'Green');
     }
   });
@@ -228,20 +234,25 @@ client.on('messageCreate', async message => {
 client.on('voiceStateUpdate', async (oldState, newState) => {
   const member = newState.member || oldState.member;
   if (member.user.bot) return;
-  db.run('INSERT OR IGNORE INTO users (id) VALUES (?)', [member.id]);
+  await db.query('INSERT INTO users (id) VALUES ($1) ON CONFLICT (id) DO NOTHING', [member.id]);
   if (oldState.channelId && !newState.channelId) { // left
     const start = voiceTimes.get(member.id);
     if (start) {
       const minutes = Math.floor((Date.now() - start) / 60000);
       voiceTimes.delete(member.id);
-      db.run('INSERT OR REPLACE INTO voice_times (user_id, minutes, last_reset) VALUES (?, COALESCE((SELECT minutes FROM voice_times WHERE user_id = ? AND last_reset = CURRENT_DATE), 0) + ?, CURRENT_DATE)', [member.id, member.id, minutes]);
+      await db.query(`
+        INSERT INTO voice_times (user_id, minutes, last_reset) 
+        VALUES ($1, $2, CURRENT_DATE) 
+        ON CONFLICT (user_id, last_reset) 
+        DO UPDATE SET minutes = voice_times.minutes + $2
+      `, [member.id, minutes]);
       // Reward every 60 minutes
-      db.get('SELECT minutes FROM voice_times WHERE user_id = ? AND last_reset = CURRENT_DATE', [member.id], (err, row) => {
-        if (row) {
-          const totalMinutes = row.minutes;
+      const { rows } = await db.query('SELECT minutes FROM voice_times WHERE user_id = $1 AND last_reset = CURRENT_DATE', [member.id]);
+        if (rows[0]) {
+          const totalMinutes = rows[0].minutes;
           const rewards = Math.floor(totalMinutes / 60) - Math.floor((totalMinutes - minutes) / 60);
           if (rewards > 0) {
-            db.run('UPDATE users SET balance = balance + ? WHERE id = ?', [rewards * 20, member.id]);
+            await db.query('UPDATE users SET balance = balance + $1 WHERE id = $2', [rewards * 20, member.id]);
             logActivity('🎤 Voice Chat Reward', `<@${member.id}> received **${rewards * 20}** Heavenly Pounds for spending time in voice chat.`, 'Green');
           }
         }
@@ -258,20 +269,20 @@ client.on('guildMemberUpdate', async (oldMember, newMember) => {
     const guild = newMember.guild;
     const currentBoosts = guild.premiumSubscriptionCount;
 
-    db.get('SELECT rewarded_boosts FROM server_stats WHERE id = ?', [guild.id], (err, row) => {
-      const rewardedBoosts = row?.rewarded_boosts || 0;
+    const { rows } = await db.query('SELECT rewarded_boosts FROM server_stats WHERE id = $1', [guild.id]);
+      const rewardedBoosts = rows[0]?.rewarded_boosts || 0;
       const newBoosts = currentBoosts - rewardedBoosts;
 
       if (newBoosts > 0) {
         const reward = newBoosts * 1000;
-        db.run('INSERT OR IGNORE INTO users (id) VALUES (?)', [newMember.id]);
-        db.run('UPDATE users SET balance = balance + ? WHERE id = ?', [reward, newMember.id]);
+        await db.query('INSERT INTO users (id) VALUES ($1) ON CONFLICT (id) DO NOTHING', [newMember.id]);
+        await db.query('UPDATE users SET balance = balance + $1 WHERE id = $2', [reward, newMember.id]);
         
         // Update the user's personal boost count
-        db.run('INSERT OR REPLACE INTO boosts (user_id, boosts) VALUES (?, COALESCE((SELECT boosts FROM boosts WHERE user_id = ?), 0) + ?)', [newMember.id, newMember.id, newBoosts]);
+        await db.query('INSERT INTO boosts (user_id, boosts) VALUES ($1, $2) ON CONFLICT (user_id) DO UPDATE SET boosts = boosts.boosts + $2', [newMember.id, newBoosts]);
         
         // Update the total rewarded boosts for the server
-        db.run('INSERT OR REPLACE INTO server_stats (id, rewarded_boosts) VALUES (?, ?)', [guild.id, currentBoosts]);
+        await db.query('INSERT INTO server_stats (id, rewarded_boosts) VALUES ($1, $2) ON CONFLICT (id) DO UPDATE SET rewarded_boosts = $2', [guild.id, currentBoosts]);
         
         logActivity('🚀 Server Boost Reward', `<@${newMember.id}> received **${reward}** Heavenly Pounds for **${newBoosts}** new boost(s).`, 'Gold');
       }
@@ -282,7 +293,7 @@ client.on('guildMemberUpdate', async (oldMember, newMember) => {
 client.on('guildCreate', guild => {
   console.log(`Joined a new guild: ${guild.name}`);
   // Initialize server pool with 100k
-  db.run('INSERT OR IGNORE INTO server_stats (id, pool_balance) VALUES (?, ?)', [guild.id, 100000], function(err) {
+  db.query('INSERT INTO server_stats (id, pool_balance) VALUES ($1, 100000) ON CONFLICT (id) DO NOTHING', [guild.id], (err, res) => {
     if (err) {
       return console.error('Failed to initialize server pool on guild join:', err.message);
     }
@@ -293,10 +304,11 @@ client.on('guildCreate', guild => {
 client.on('interactionCreate', async interaction => {
   if (interaction.isChatInputCommand()) { // Handle Slash Commands
     const { commandName } = interaction;
-    db.run('INSERT OR IGNORE INTO users (id) VALUES (?)', [interaction.user.id]);
+    await db.query('INSERT INTO users (id) VALUES ($1) ON CONFLICT (id) DO NOTHING', [interaction.user.id]);
 
     if (commandName === 'balance') {
-    db.get('SELECT * FROM users WHERE id = ?', [interaction.user.id], (err, row) => {
+    const { rows } = await db.query('SELECT * FROM users WHERE id = $1', [interaction.user.id]);
+      const row = rows[0];
       const embed = new EmbedBuilder()
         .setTitle(`📊 Balance of ${interaction.user.username}`)
         .addFields(
@@ -308,7 +320,6 @@ client.on('interactionCreate', async interaction => {
         )
         .setFooter({ text: 'Note: Resources (RSS) will be granted when the temple is conquered. If the project is canceled, all resources and currency will be lost.' });
       interaction.reply({ embeds: [embed] });
-    });
     } else if (commandName === 'shop') {
     const embed = new EmbedBuilder()
       .setTitle('🛍️ Heavenly Shop')
@@ -368,13 +379,11 @@ client.on('interactionCreate', async interaction => {
       const today = new Date();
       const todayStr = today.toISOString().slice(0, 10); // YYYY-MM-DD
 
-      db.get('SELECT last_daily, daily_streak FROM users WHERE id = ?', [userId], (err, row) => {
-        if (err) {
-          console.error(err);
-          return interaction.reply({ content: '❌ An error occurred while processing your daily reward.', flags: [MessageFlags.Ephemeral] });
-        }
+      try {
+        const { rows } = await db.query('SELECT last_daily, daily_streak FROM users WHERE id = $1', [userId]);
+        const row = rows[0];
 
-        const lastDaily = row?.last_daily;
+        const lastDaily = row?.last_daily ? new Date(row.last_daily).toISOString().slice(0, 10) : null;
         let streak = row?.daily_streak || 0;
 
         if (lastDaily === todayStr) {
@@ -399,7 +408,7 @@ client.on('interactionCreate', async interaction => {
 
         const reward = 10 + streak;
 
-        db.run('UPDATE users SET balance = balance + ?, last_daily = ?, daily_streak = ? WHERE id = ?', [reward, todayStr, streak, userId]);
+        await db.query('UPDATE users SET balance = balance + $1, last_daily = $2, daily_streak = $3 WHERE id = $4', [reward, todayStr, streak, userId]);
 
         const replyEmbed = new EmbedBuilder()
           .setTitle('🎉 Daily Reward Claimed! 🎉')
@@ -407,18 +416,26 @@ client.on('interactionCreate', async interaction => {
           .setColor('Gold');
         interaction.reply({ embeds: [replyEmbed] });
         logActivity('🎁 Daily Reward', `<@${userId}> claimed their daily reward of **${reward}** 💰 (Streak: ${streak}).`, 'Aqua');
-      });
+      } catch (err) {
+        console.error(err);
+          return interaction.reply({ content: '❌ An error occurred while processing your daily reward.', flags: [MessageFlags.Ephemeral] });
+        }
     } else if (commandName === 'stats') {
       const user = interaction.options.getUser('user') || interaction.user;
 
       const statsPromises = [
-        new Promise(resolve => db.get('SELECT invites FROM invites WHERE user_id = ?', [user.id], (err, row) => resolve(row?.invites || 0))),
-        new Promise(resolve => db.get('SELECT boosts FROM boosts WHERE user_id = ?', [user.id], (err, row) => resolve(row?.boosts || 0))),
-        new Promise(resolve => db.get('SELECT count FROM message_counts WHERE user_id = ? AND last_reset = CURRENT_DATE', [user.id], (err, row) => resolve(row?.count || 0))),
-        new Promise(resolve => db.get('SELECT minutes FROM voice_times WHERE user_id = ? AND last_reset = CURRENT_DATE', [user.id], (err, row) => resolve(row?.minutes || 0))),
+        db.query('SELECT invites FROM invites WHERE user_id = $1', [user.id]),
+        db.query('SELECT boosts FROM boosts WHERE user_id = $1', [user.id]),
+        db.query('SELECT count FROM message_counts WHERE user_id = $1 AND last_reset = CURRENT_DATE', [user.id]),
+        db.query('SELECT minutes FROM voice_times WHERE user_id = $1 AND last_reset = CURRENT_DATE', [user.id]),
       ];
 
-      Promise.all(statsPromises).then(([invites, boosts, messages, voiceMinutes]) => {
+      Promise.all(statsPromises).then(([invitesRes, boostsRes, messagesRes, voiceMinutesRes]) => {
+        const invites = invitesRes.rows[0]?.invites || 0;
+        const boosts = boostsRes.rows[0]?.boosts || 0;
+        const messages = messagesRes.rows[0]?.count || 0;
+        const voiceMinutes = voiceMinutesRes.rows[0]?.minutes || 0;
+
         const statsEmbed = new EmbedBuilder()
           .setTitle(`📈 Stats for ${user.username}`)
           .setThumbnail(user.displayAvatarURL())
@@ -433,11 +450,8 @@ client.on('interactionCreate', async interaction => {
       });
 
     } else if (commandName === 'leaderboard') {
-    db.all('SELECT id, balance FROM users ORDER BY balance DESC', [], async (err, allUsers) => {
-      if (err) {
-        console.error(err);
-        return interaction.reply('❌ An error occurred while fetching the leaderboard.');
-      }
+    try {
+      const { rows: allUsers } = await db.query('SELECT id, balance FROM users ORDER BY balance DESC');
 
       const top10Users = allUsers.slice(0, 10);
       const embed = new EmbedBuilder()
@@ -470,20 +484,22 @@ client.on('interactionCreate', async interaction => {
 
       embed.setDescription(description);
       interaction.reply({ embeds: [embed] });
-    });
+    } catch (err) {
+      console.error(err);
+        return interaction.reply('❌ An error occurred while fetching the leaderboard.');
+      }
     } else if (commandName === 'pool') {
     const adminIds = (process.env.ADMIN_IDS || '').split(',');
     if (!adminIds.includes(interaction.user.id)) {
       return interaction.reply('🚫 You do not have permission to use this command.');
     }
-    db.get('SELECT pool_balance FROM server_stats WHERE id = ?', [interaction.guildId], (err, row) => {
-      const poolBalance = row?.pool_balance || 0;
+    const { rows } = await db.query('SELECT pool_balance FROM server_stats WHERE id = $1', [interaction.guildId]);
+      const poolBalance = rows[0]?.pool_balance || 0;
       const embed = new EmbedBuilder()
         .setTitle('🏦 Server Pool Balance')
         .setDescription(`The server pool currently holds **${poolBalance.toLocaleString('en-US')}** 💰.`)
         .setColor('Aqua');
       interaction.reply({ embeds: [embed], flags: [MessageFlags.Ephemeral] });
-    });
     } else if (commandName === 'giveaway') {
     const adminIds = (process.env.ADMIN_IDS || '').split(',');
     if (!adminIds.includes(interaction.user.id)) {
@@ -501,14 +517,14 @@ client.on('interactionCreate', async interaction => {
     const entryCost = interaction.options.getNumber('entry_cost') || 0;
     const pingRoleId = process.env.GIVEAWAY_PING_ROLE_ID;
 
-    db.get('SELECT pool_balance FROM server_stats WHERE id = ?', [interaction.guildId], async (err, row) => {
-      const poolBalance = row?.pool_balance || 0;
+    const { rows } = await db.query('SELECT pool_balance FROM server_stats WHERE id = $1', [interaction.guildId]);
+      const poolBalance = rows[0]?.pool_balance || 0;
       if (prize > poolBalance) {
         return interaction.reply(`❌ Not enough funds in the server pool! The pool only has **${poolBalance.toLocaleString('en-US')}** 💰.`);
       }
 
       // Deduct from pool
-      db.run('UPDATE server_stats SET pool_balance = pool_balance - ? WHERE id = ?', [prize, interaction.guildId]);
+      await db.query('UPDATE server_stats SET pool_balance = pool_balance - $1 WHERE id = $2', [prize, interaction.guildId]);
 
       const endTime = Date.now() + durationMs;
       const embed = new EmbedBuilder()
@@ -529,27 +545,27 @@ client.on('interactionCreate', async interaction => {
       collector.on('collect', (reaction, user) => {
         if (user.bot) return;
 
-        db.get('SELECT balance FROM users WHERE id = ?', [user.id], (err, userRow) => {
-          if ((userRow?.balance || 0) < entryCost) {
+        db.query('SELECT balance FROM users WHERE id = $1', [user.id]).then(({ rows: userRows }) => {
+          if ((userRows[0]?.balance || 0) < entryCost) {
             reaction.users.remove(user.id);
             user.send(`❌ You don't have enough Heavenly Pounds to enter the giveaway. You need **${entryCost}** 💰.`).catch(() => {});
             return;
           }
 
           if (!participants.has(user.id)) {
-            db.run('UPDATE users SET balance = balance - ? WHERE id = ?', [entryCost, user.id]);
-            db.run('UPDATE server_stats SET pool_balance = pool_balance + ? WHERE id = ?', [entryCost, interaction.guildId]);
+            db.query('UPDATE users SET balance = balance - $1 WHERE id = $2', [entryCost, user.id]);
+            db.query('UPDATE server_stats SET pool_balance = pool_balance + $1 WHERE id = $2', [entryCost, interaction.guildId]);
             participants.add(user.id);
           }
         });
       });
 
-      collector.on('end', collected => {
+      collector.on('end', async collected => {
         activeGiveaways.delete(giveawayMessage.id);
         const winnerIds = Array.from(participants);
 
         if (winnerIds.length === 0) {
-          db.run('UPDATE server_stats SET pool_balance = pool_balance + ? WHERE id = ?', [prize, interaction.guildId]);
+          await db.query('UPDATE server_stats SET pool_balance = pool_balance + $1 WHERE id = $2', [prize, interaction.guildId]);
           return interaction.channel.send('The giveaway ended with no participants. The prize has been returned to the server pool.');
         }
 
@@ -560,11 +576,10 @@ client.on('interactionCreate', async interaction => {
         }
 
         const prizePerWinner = Math.floor(prize / winners.length);
-        winners.forEach(winnerId => db.run('UPDATE users SET balance = balance + ? WHERE id = ?', [prizePerWinner, winnerId]));
+        winners.forEach(winnerId => db.query('UPDATE users SET balance = balance + $1 WHERE id = $2', [prizePerWinner, winnerId]));
 
         interaction.channel.send(`Congratulations to ${winners.map(id => `<@${id}>`).join(', ')}! You've each won **${prizePerWinner.toLocaleString('en-US')}** 💰!`);
       });
-    });
     } else if (commandName === 'giveaway-end') {
       const adminIds = (process.env.ADMIN_IDS || '').split(',');
       if (!adminIds.includes(interaction.user.id)) {
@@ -586,7 +601,7 @@ client.on('interactionCreate', async interaction => {
       activeGiveaways.delete(messageId);
 
       // Refund the prize
-      db.run('UPDATE server_stats SET pool_balance = pool_balance + ? WHERE id = ?', [prizeToRefund, interaction.guildId]);
+      await db.query('UPDATE server_stats SET pool_balance = pool_balance + $1 WHERE id = $2', [prizeToRefund, interaction.guildId]);
 
       // Edit the original message
       const giveawayChannel = await client.channels.fetch(collector.channel.id);
@@ -599,7 +614,7 @@ client.on('interactionCreate', async interaction => {
         const reactions = giveawayMessage.reactions.cache.get('🎉');
         const users = await reactions.users.fetch();
         users.filter(user => !user.bot).forEach(user => {
-          db.run('UPDATE users SET balance = balance + ? WHERE id = ?', [entryCost, user.id]);
+          db.query('UPDATE users SET balance = balance + $1 WHERE id = $2', [entryCost, user.id]);
         });
       }
 
@@ -650,16 +665,15 @@ client.on('interactionCreate', async interaction => {
       const cost = parseFloat(costStr);
       const resourceAmount = parseInt(resourceAmountStr, 10);
 
-      db.get('SELECT balance FROM users WHERE id = ?', [interaction.user.id], (err, userRow) => {
-        if ((userRow?.balance || 0) < cost) {
+    const { rows: userRows } = await db.query('SELECT balance FROM users WHERE id = $1', [interaction.user.id]);
+      if ((userRows[0]?.balance || 0) < cost) {
           return interaction.update({ content: `❌ Oops! You no longer have enough Heavenly Pounds.`, embeds: [], components: [] });
         }
-        db.run(`UPDATE users SET balance = balance - ?, ${resource} = ${resource} + ? WHERE id = ?`, [cost, resourceAmount, interaction.user.id]);
-        db.run('UPDATE server_stats SET pool_balance = pool_balance + ? WHERE id = ?', [cost, interaction.guildId]);
+      await db.query(`UPDATE users SET balance = balance - $1, ${resource} = ${resource} + $2 WHERE id = $3`, [cost, resourceAmount, interaction.user.id]);
+      await db.query('UPDATE server_stats SET pool_balance = pool_balance + $1 WHERE id = $2', [cost, interaction.guildId]);
         interaction.update({ content: `✅ Success! You spent **${cost.toLocaleString('en-US')}** 💰 and received **${resourceAmount.toLocaleString('en-US')} ${resource}**!`, embeds: [], components: [] });
         logActivity('🛒 Shop Purchase', `<@${interaction.user.id}> bought **${resourceAmount.toLocaleString('en-US')} ${resource}** for **${cost.toLocaleString('en-US')}** Heavenly Pounds.`, 'Blue')
           .then(() => logPurchaseToSheet(interaction.user.username, resource, resourceAmount, cost));
-      });
     } else if (interaction.customId === 'cancel_buy') {
       await interaction.update({ content: 'Purchase canceled.', embeds: [], components: [] });
     }
