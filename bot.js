@@ -299,15 +299,15 @@ client.on('guildMemberUpdate', async (oldMember, newMember) => {
   }
 });
 
-client.on('guildCreate', guild => {
+client.on('guildCreate', async (guild) => {
   console.log(`Joined a new guild: ${guild.name}`);
-  // Initialize server pool with 100k
-  db.query('INSERT INTO server_stats (id, pool_balance) VALUES ($1, 100000) ON CONFLICT (id) DO NOTHING', [guild.id], (err, res) => {
-    if (err) {
-      return console.error('Failed to initialize server pool on guild join:', err.message);
-    }
+  try {
+    // Initialize server pool with 100k
+    await db.query('INSERT INTO server_stats (id, pool_balance) VALUES ($1, 100000) ON CONFLICT (id) DO NOTHING', [guild.id]);
     logActivity('🏦 Server Pool Initialized', `The bot joined a new server. The pool has been initialized with **100,000** 💰.`, 'Green');
-  });
+  } catch (err) {
+    console.error('Failed to initialize server pool on guild join:', err.message);
+  }
 });
 
 client.on('interactionCreate', async interaction => {
