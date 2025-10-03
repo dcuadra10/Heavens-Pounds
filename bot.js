@@ -1,5 +1,5 @@
 const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle, Events, MessageFlags } = require('discord.js');
-const db = require('./database');
+const { pool: db, initializeDatabase } = require('./database');
 const express = require('express');
 const { GoogleSpreadsheet } = require('google-spreadsheet');
 const { JWT } = require('google-auth-library');
@@ -205,7 +205,6 @@ client.on('guildMemberAdd', async member => {
     cachedInvites.set(invite.code, invite.uses);
   });
   if (inviterId && inviterId !== member.id) { // avoid self
-    db.run('INSERT OR IGNORE INTO users (id) VALUES (?)', [inviterId]);
     await db.query('INSERT INTO users (id) VALUES ($1) ON CONFLICT (id) DO NOTHING', [inviterId]);
     await db.query('UPDATE users SET balance = balance + 80 WHERE id = $1', [inviterId]);
     await db.query('INSERT INTO invites (user_id, invites) VALUES ($1, 1) ON CONFLICT (user_id) DO UPDATE SET invites = invites.invites + 1', [inviterId]);
@@ -705,4 +704,17 @@ app.get('/', (req, res) => {
 
 app.listen(port, () => console.log(`Health check server listening on port ${port}`));
 
-client.login(process.env.DISCORD_TOKEN);
+async function startBot() {
+  try {
+    // Ensure the database is initialized before logging in
+    await initializeDatabase();
+
+    // Log in to Discord
+    await client.login(process.env.DISCORD_TOKEN);
+  } catch (error) {
+    console.error('Failed to start the bot:', error);
+    process.exit(1);
+  }
+}
+
+startBot();

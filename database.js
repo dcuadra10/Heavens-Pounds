@@ -77,6 +77,7 @@ async function initializeDatabase() {
   }
 }
 
-initializeDatabase();
-
-module.exports = pool;
+module.exports = {
+  pool,
+  initializeDatabase,
+};
