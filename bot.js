@@ -382,7 +382,6 @@ client.on('interactionCreate', async interaction => {
         .setColor('Green')
         .addFields(
           {
-             value: '- **Invites**: Earn **80** 💰 for each person you invite.\n' +
             name: '💸 How to Earn Heavenly Pounds',
             value: '- **Invites**: Earn **80** 💰 for each person you invite.\n' +
                    '- **Messages**: Earn **20** 💰 for every 100 messages you send.\n' +
@@ -401,9 +400,6 @@ client.on('interactionCreate', async interaction => {
           },
           {
             name: '⚙️ Admin Commands',
-            value: '`/pool`: Check the server pool balance.\n' +
-                   '`/giveaway`: Start a giveaway funded by the server pool.\n' +
-                   '`/giveaway-end`: Cancel an active giveaway.'
             value: '`/pool`: Check the server pool balance.'
           },
         );
