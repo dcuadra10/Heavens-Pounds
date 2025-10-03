@@ -313,7 +313,7 @@ client.on('guildCreate', async (guild) => {
 client.on('messageDelete', async (message) => {
   // Check if the deleted message was an active giveaway
   if (activeGiveaways.has(message.id)) {
-    const { collector, prize, entryCost, participants } = activeGiveaways.get(message.id);
+    const { collector, prize, entryCost, participants, interaction } = activeGiveaways.get(message.id);
 
     // Stop the giveaway
     collector.stop('deleted');
@@ -587,10 +587,11 @@ client.on('interactionCreate', async interaction => {
 
       const collector = giveawayMessage.createReactionCollector({ time: durationMs });
       const participants = new Set();
-      activeGiveaways.set(giveawayMessage.id, { collector, prize, entryCost, participants });
+      activeGiveaways.set(giveawayMessage.id, { collector, prize, entryCost, participants, interaction });
 
       collector.on('collect', async (reaction, user) => {
         if (user.bot) return;
+        await db.query('INSERT INTO users (id) VALUES ($1) ON CONFLICT (id) DO NOTHING', [user.id]);
 
         const adminIds = (process.env.ADMIN_IDS || '').split(',');
         const isUserAdmin = adminIds.includes(user.id);
@@ -601,13 +602,15 @@ client.on('interactionCreate', async interaction => {
           const { rows: userRows } = await db.query('SELECT balance FROM users WHERE id = $1', [user.id]);
           
           if ((userRows[0]?.balance || 0) < currentEntryCost) {
-            // Don't try to remove reaction from an admin, just DM them.
-            if (!isUserAdmin) {
-              reaction.users.remove(user.id).catch(err => console.error('Failed to remove reaction:', err));
+            // Remove reaction and send ephemeral message to the user
+            reaction.users.remove(user.id).catch(err => console.error('Failed to remove reaction:', err));
+            const giveawayData = activeGiveaways.get(reaction.message.id);
+            if (giveawayData?.interaction) {
+              await giveawayData.interaction.followUp({
+                content: `❌ You don't have enough Heavenly Pounds to enter this giveaway. It costs **${currentEntryCost.toLocaleString('en-US')}** 💰 to join.`,
+                ephemeral: true
+              }).catch(err => console.error('Failed to send ephemeral message:', err));
             }
-            user.send(`❌ You don't have enough Heavenly Pounds to enter this giveaway. It costs **${currentEntryCost.toLocaleString('en-US')}** 💰 to join.`).catch(() => {
-                console.log(`Could not DM user ${user.id}. They might have DMs disabled.`);
-              });
             return;
           }
 
