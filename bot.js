@@ -587,9 +587,7 @@ client.on('interactionCreate', async interaction => {
 
       const collector = giveawayMessage.createReactionCollector({ time: durationMs });
       const participants = new Set();
-      // Pass entryCost directly into the collector options for reliable access
-      collector.options.entryCost = entryCost;
-      activeGiveaways.set(giveawayMessage.id, { collector, prize, participants });
+      activeGiveaways.set(giveawayMessage.id, { collector, prize, entryCost, participants });
 
       collector.on('collect', async (reaction, user) => {
         if (user.bot) return;
@@ -597,7 +595,7 @@ client.on('interactionCreate', async interaction => {
         const adminIds = (process.env.ADMIN_IDS || '').split(',');
         const isUserAdmin = adminIds.includes(user.id);
 
-        const currentEntryCost = reaction.message.client.giveaways.get(reaction.message.id)?.entryCost || 0;
+        const currentEntryCost = activeGiveaways.get(reaction.message.id)?.entryCost || 0;
 
         try {
           const { rows: userRows } = await db.query('SELECT balance FROM users WHERE id = $1', [user.id]);
