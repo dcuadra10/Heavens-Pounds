@@ -18,7 +18,6 @@ const client = new Client({
 
 const cachedInvites = new Map(); // code -> uses
 const voiceTimes = new Map(); // userId -> startTime
-const activeGiveaways = new Map(); // messageId -> collector
 
 // --- Logging Function ---
 async function logActivity(title, message, color = 'Blue') {
@@ -310,27 +309,6 @@ client.on('guildCreate', async (guild) => {
   }
 });
 
-client.on('messageDelete', async (message) => {
-  // Check if the deleted message was an active giveaway
-  if (activeGiveaways.has(message.id)) {
-    const { collector, prize, entryCost, participants, interaction } = activeGiveaways.get(message.id);
-
-    // Stop the giveaway
-    collector.stop('deleted');
-    activeGiveaways.delete(message.id);
-
-    // Refund the main prize to the server pool
-    await db.query('UPDATE server_stats SET pool_balance = pool_balance + $1 WHERE id = $2', [prize, message.guildId]);
-
-    // Refund entry fees to all participants
-    participants.forEach(userId => {
-      db.query('UPDATE users SET balance = balance + $1 WHERE id = $2', [entryCost, userId]);
-    });
-
-    logActivity('🎁 Giveaway Canceled', `The giveaway message (\`${message.id}\`) was deleted. The prize has been refunded to the pool and entry fees returned to participants.`, 'Orange');
-  }
-});
-
 client.on('interactionCreate', async interaction => {
   if (interaction.isChatInputCommand()) { // Handle Slash Commands
     const { commandName } = interaction;
@@ -547,120 +525,6 @@ client.on('interactionCreate', async interaction => {
         .setDescription(`The server pool currently holds **${poolBalance.toLocaleString('en-US')}** 💰.`)
         .setColor('Aqua');
       await interaction.editReply({ embeds: [embed] });
-    } else if (commandName === 'giveaway') {
-    await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
-    const adminIds = (process.env.ADMIN_IDS || '').split(',');
-    if (!adminIds.includes(interaction.user.id)) {
-      return await interaction.editReply('🚫 You do not have permission to use this command.');
-    }
-
-    const durationString = interaction.options.getString('duration');
-    const durationMs = parseDuration(durationString);
-    if (!durationMs) {
-      return await interaction.editReply('⚠️ Invalid duration format. Please use formats like `10m`, `2h`, or `3d`.');
-    }
-
-    const winnersCount = interaction.options.getInteger('winners');
-    const prize = parseShorthand(interaction.options.getString('total_prize'));
-    const entryCost = interaction.options.getNumber('entry_cost') || 0;
-    const pingRoleId = process.env.GIVEAWAY_PING_ROLE_ID;
-
-    const { rows } = await db.query('SELECT pool_balance FROM server_stats WHERE id = $1', [interaction.guildId]);
-      const poolBalance = rows[0]?.pool_balance || 0;
-      if (prize > poolBalance) {
-        return await interaction.editReply(`❌ Not enough funds in the server pool! The pool only has **${poolBalance.toLocaleString('en-US')}** 💰.`);
-      }
-
-      // Deduct from pool
-      await db.query('UPDATE server_stats SET pool_balance = pool_balance - $1 WHERE id = $2', [prize, interaction.guildId]);
-
-      const endTime = Date.now() + durationMs;
-      const embed = new EmbedBuilder()
-        .setTitle('🎉 GIVEAWAY! 🎉')
-        .setDescription(`React with 🎉 to enter!\n\n**Prize:** **${prize.toLocaleString('en-US')}** Heavenly Pounds 💰\n**Entry Cost:** ${entryCost > 0 ? `**${entryCost.toLocaleString('en-US')}** 💰` : 'Free'}\n**Winners:** ${winnersCount}\n**Ends:** <t:${Math.floor(endTime / 1000)}:R>`)
-        .setColor('Purple')
-        .setFooter({ text: `Started by ${interaction.user.username}` });
-
-      const giveawayMessage = await interaction.channel.send({ content: pingRoleId ? `<@&${pingRoleId}>` : '@here', embeds: [embed] });
-      giveawayMessage.react('🎉');
-      await interaction.editReply({ content: '✅ Giveaway started!' });
-
-      const collector = giveawayMessage.createReactionCollector({ time: durationMs });
-      const participants = new Set();
-      activeGiveaways.set(giveawayMessage.id, { collector, prize, entryCost, participants, interaction });
-
-      collector.on('collect', async (reaction, user) => {
-        if (user.bot) return;
-        await db.query('INSERT INTO users (id) VALUES ($1) ON CONFLICT (id) DO NOTHING', [user.id]);
-
-        const adminIds = (process.env.ADMIN_IDS || '').split(',');
-        const isUserAdmin = adminIds.includes(user.id);
-
-        const currentEntryCost = activeGiveaways.get(reaction.message.id)?.entryCost || 0;
-
-        try {
-          const { rows: userRows } = await db.query('SELECT balance FROM users WHERE id = $1', [user.id]);
-          
-          if ((userRows[0]?.balance || 0) < currentEntryCost) {
-            // Remove reaction and send ephemeral message to the user
-            reaction.users.remove(user.id).catch(err => console.error('Failed to remove reaction:', err));
-            const giveawayData = activeGiveaways.get(reaction.message.id);
-            if (giveawayData?.interaction) {
-              try {
-                await giveawayData.interaction.followUp({
-                  content: `❌ No tienes suficientes Heavenly Pounds para entrar al giveaway. Cuesta **${currentEntryCost.toLocaleString('en-US')}** 💰 unirse.`,
-                  ephemeral: true
-                });
-              } catch (err) {
-                console.error('Failed to send ephemeral message, falling back to DM:', err);
-                user.send(`❌ No tienes suficientes Heavenly Pounds para entrar al giveaway. Cuesta **${currentEntryCost.toLocaleString('en-US')}** 💰 unirse.`).catch(() => {
-                  console.log(`Could not DM user ${user.id}.`);
-                });
-              }
-            } else {
-              // Fallback to DM if no interaction
-              user.send(`❌ No tienes suficientes Heavenly Pounds para entrar al giveaway. Cuesta **${currentEntryCost.toLocaleString('en-US')}** 💰 unirse.`).catch(() => {
-                console.log(`Could not DM user ${user.id}.`);
-              });
-            }
-            return;
-          }
-
-          if (!participants.has(user.id)) {
-            await db.query('UPDATE users SET balance = balance - $1 WHERE id = $2', [currentEntryCost, user.id]);
-            await db.query('UPDATE server_stats SET pool_balance = pool_balance + $1 WHERE id = $2', [currentEntryCost, interaction.guildId]);
-            participants.add(user.id);
-          }
-        } catch (error) {
-            console.error('Error during giveaway collection:', error);
-            reaction.users.remove(user.id).catch(err => console.error('Failed to remove reaction on error:', err));
-        }
-      });
-
-      collector.on('end', async (collected, reason) => {
-        activeGiveaways.delete(giveawayMessage.id);
-
-        // If the giveaway was stopped because the message was deleted, do nothing here.
-        if (reason === 'deleted') return;
-
-        const winnerIds = Array.from(participants);
-
-        if (winnerIds.length === 0) {
-          await db.query('UPDATE server_stats SET pool_balance = pool_balance + $1 WHERE id = $2', [prize, interaction.guildId]);
-          return interaction.channel.send('The giveaway ended with no participants. The prize has been returned to the server pool.');
-        }
-
-        const winners = [];
-        for (let i = 0; i < winnersCount && winnerIds.length > 0; i++) {
-          const winnerIndex = Math.floor(Math.random() * winnerIds.length);
-          winners.push(winnerIds.splice(winnerIndex, 1)[0]);
-        }
-
-        const prizePerWinner = Math.floor(prize / winners.length);
-        winners.forEach(winnerId => db.query('UPDATE users SET balance = balance + $1 WHERE id = $2', [prizePerWinner, winnerId]));
-
-        interaction.channel.send(`Congratulations to ${winners.map(id => `<@${id}>`).join(', ')}! You've each won **${prizePerWinner.toLocaleString('en-US')}** 💰!`);
-      });
     }
   } else if (interaction.isModalSubmit()) { // Handle Modal Submissions
     if (interaction.customId.startsWith('buy_modal_')) {

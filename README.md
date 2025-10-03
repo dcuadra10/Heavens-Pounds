@@ -14,7 +14,7 @@ A Discord bot for managing a virtual currency called "Heavenly Pounds", with a s
 1. Create a Discord bot at https://discord.com/developers/applications
 2. Copy the Application ID (Client ID) and Bot Token.
 3. Create a `.env` file and add your `DISCORD_TOKEN`, `CLIENT_ID`, `GUILD_ID`, `ADMIN_IDS`, `LOG_CHANNEL_ID`, and `GIVEAWAY_PING_ROLE_ID`.
-4. Install dependencies: `npm install`
+4. Install dependencies: `npm install discord.js pg express google-spreadsheet google-auth-library dotenv`
 5. Deploy commands: `node deploy-commands.js`
 6. Run the bot: `npm start`
 

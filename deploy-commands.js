@@ -51,32 +51,6 @@ const commands = [
   new SlashCommandBuilder()
     .setName('pool')
     .setDescription('Admin: Check the server pool balance'),
-
-  new SlashCommandBuilder()
-    .setName('giveaway')
-    .setDescription('Admin: Start a giveaway from the server pool')
-    .addStringOption(option =>
-      option.setName('duration')
-        .setDescription('Duration of the giveaway (e.g., 10m, 2h, 3d)')
-        .setRequired(true)
-    )
-    .addIntegerOption(option =>
-      option.setName('winners')
-        .setDescription('Number of winners')
-        .setRequired(true)
-        .setMinValue(1)
-    )
-    .addStringOption(option =>
-      option.setName('total_prize')
-        .setDescription('Total prize amount in HP (e.g., 1000, 10k)')
-        .setRequired(true)
-    )
-    .addNumberOption(option =>
-      option.setName('entry_cost')
-        .setDescription('Amount of HP to enter the giveaway (0 for free)')
-        .setRequired(false)
-        .setMinValue(0)
-    ),
 ].map(command => command.toJSON());
 
 const rest = new REST({ version: '9' }).setToken(process.env.DISCORD_TOKEN);
