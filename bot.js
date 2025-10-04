@@ -590,11 +590,44 @@ client.on('interactionCreate', async interaction => {
 const app = express();
 const port = process.env.PORT || 8080;
 
+// Middleware to log incoming health check requests
+app.use((req, res, next) => {
+  console.log(`[${new Date().toUTCString()}] Received a ping to keep the bot alive.`);
+  next();
+});
+
 app.get('/', (req, res) => {
   res.send('Heavenly Pounds bot is alive!');
 });
 
 app.listen(port, () => console.log(`Health check server listening on port ${port}`));
+
+// --- Healthchecks.io Ping ---
+function setupHealthchecksPing() {
+  const healthcheckUrl = process.env.HEALTHCHECK_URL;
+  if (!healthcheckUrl) {
+    console.log('HEALTHCHECK_URL not found, skipping Healthchecks.io setup.');
+    return;
+  }
+
+  console.log('Setting up ping to Healthchecks.io...');
+  // Ping immediately on start and then every 50 seconds
+  const ping = () => {
+    fetch(healthcheckUrl)
+      .then(res => {
+        if (res.ok) {
+          console.log(`[${new Date().toUTCString()}] Successfully pinged Healthchecks.io.`);
+        } else {
+          console.error(`[${new Date().toUTCString()}] Failed to ping Healthchecks.io. Status: ${res.status}`);
+        }
+      })
+      .catch(err => console.error('Failed to ping Healthchecks.io:', err.message));
+  };
+  
+  ping();
+  setInterval(ping, 50 * 1000); // 50 seconds
+}
+
 
 async function startBot() {
   try {
@@ -603,6 +636,9 @@ async function startBot() {
 
     // Log in to Discord
     await client.login(process.env.DISCORD_TOKEN);
+
+    // Set up the keep-alive ping if configured
+    setupHealthchecksPing();
   } catch (error) {
     console.error('Failed to start the bot:', error);
     process.exit(1);
