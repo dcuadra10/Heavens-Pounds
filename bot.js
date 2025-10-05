@@ -571,7 +571,6 @@ client.on('interactionCreate', async interaction => {
       await db.query('UPDATE server_stats SET pool_balance = pool_balance + $1 WHERE id = $2', [amountTaken, interaction.guildId]);
       await db.query('UPDATE users SET balance = $1 WHERE id = $2', [newBalance, targetUser.id]);
       await interaction.editReply({ content: `✅ Successfully took **${amountTaken.toLocaleString('en-US')}** 💰 from ${targetUser}. Their new balance is **${newBalance.toLocaleString('en-US')}** 💰.` });
-      logActivity('💸 Admin Take', `<@${interaction.user.id}> took **${amountTaken.toLocaleString('en-US')}** 💰 from ${targetUser}.`, 'Orange');
       logActivity('💸 Admin Take', `<@${interaction.user.id}> took **${amountTaken.toLocaleString('en-US')}** 💰 from ${targetUser}. The amount was added to the server pool.`, 'Orange');
     }
   } else if (interaction.isModalSubmit()) { // Handle Modal Submissions
