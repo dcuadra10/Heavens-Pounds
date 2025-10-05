@@ -205,9 +205,9 @@ client.on('guildMemberAdd', async member => {
   });
   if (inviterId && inviterId !== member.id) { // avoid self
     await db.query('INSERT INTO users (id) VALUES ($1) ON CONFLICT (id) DO NOTHING', [inviterId]);
-    await db.query('UPDATE users SET balance = balance + 80 WHERE id = $1', [inviterId]);
+    await db.query('UPDATE users SET balance = balance + 40 WHERE id = $1', [inviterId]);
     await db.query('INSERT INTO invites (user_id, invites) VALUES ($1, 1) ON CONFLICT (user_id) DO UPDATE SET invites = invites.invites + 1', [inviterId]);
-    logActivity('💌 Invite Reward', `<@${inviterId}> received **80** Heavenly Pounds for inviting ${member.user.tag}.`, 'Green');
+    logActivity('💌 Invite Reward', `<@${inviterId}> received **40** Heavenly Pounds for inviting ${member.user.tag}.`, 'Green');
   }
 });
 
@@ -229,7 +229,7 @@ client.on('messageCreate', async message => {
   
   if (unrewardedCount >= 100) {
       const rewardsToGive = Math.floor(unrewardedCount / 100);
-      const totalReward = rewardsToGive * 20;
+      const totalReward = rewardsToGive * 10;
       await db.query('UPDATE users SET balance = balance + $1 WHERE id = $2', [totalReward, message.author.id]);
       await db.query('UPDATE message_counts SET rewarded_messages = rewarded_messages + $1 WHERE user_id = $2', [rewardsToGive * 100, message.author.id]);
       logActivity('💬 Message Reward', `<@${message.author.id}> received **${totalReward}** Heavenly Pounds for sending ${rewardsToGive * 100} messages.`, 'Green');
@@ -260,7 +260,7 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
 
         if (unrewardedMinutes >= 60) {
           const rewardsToGive = Math.floor(unrewardedMinutes / 60);
-          const totalReward = rewardsToGive * 20;
+          const totalReward = rewardsToGive * 10;
           await db.query('UPDATE users SET balance = balance + $1 WHERE id = $2', [totalReward, member.id]);
           await db.query('UPDATE voice_times SET rewarded_minutes = rewarded_minutes + $1 WHERE user_id = $2', [rewardsToGive * 60, member.id]);
           logActivity('🎤 Voice Chat Reward', `<@${member.id}> received **${totalReward}** Heavenly Pounds for spending ${rewardsToGive * 60} minutes in voice chat.`, 'Green');
@@ -283,7 +283,7 @@ client.on('guildMemberUpdate', async (oldMember, newMember) => {
       const newBoosts = currentBoosts - rewardedBoosts;
 
       if (newBoosts > 0) {
-        const reward = newBoosts * 1000;
+        const reward = newBoosts * 500;
         await db.query('INSERT INTO users (id) VALUES ($1) ON CONFLICT (id) DO NOTHING', [newMember.id]);
         await db.query('UPDATE users SET balance = balance + $1 WHERE id = $2', [reward, newMember.id]);
         
@@ -361,10 +361,10 @@ client.on('interactionCreate', async interaction => {
         .addFields(
           {
             name: '💸 How to Earn Heavenly Pounds',
-            value: '- **Invites**: Earn **80** 💰 for each person you invite.\n' +
-                   '- **Messages**: Earn **20** 💰 for every 100 messages you send.\n' +
-                   '- **Voice Chat**: Earn **20** 💰 for every hour you spend in a voice channel.\n' +
-                   '- **Server Boosts**: Earn **1,000** 💰 for each time you boost the server.'
+            value: '- **Invites**: Earn **40** 💰 for each person you invite.\n' +
+                   '- **Messages**: Earn **10** 💰 for every 100 messages you send.\n' +
+                   '- **Voice Chat**: Earn **10** 💰 for every hour you spend in a voice channel.\n' +
+                   '- **Server Boosts**: Earn **500** 💰 for each time you boost the server.'
           },
           {
             name: '🤖 User Commands',
@@ -378,7 +378,9 @@ client.on('interactionCreate', async interaction => {
           },
           {
             name: '⚙️ Admin Commands',
-            value: '`/pool`: Check the server pool balance.'
+            value: '`/pool`: Check the server pool balance.\n' +
+                   '`/give <user> <amount>`: Give currency to a user from the pool.\n' +
+                   '`/take <user> <amount>`: Take currency from a user.'
           },
         );
       interaction.reply({ embeds: [helpEmbed] });
@@ -525,6 +527,49 @@ client.on('interactionCreate', async interaction => {
         .setDescription(`The server pool currently holds **${poolBalance.toLocaleString('en-US')}** 💰.`)
         .setColor('Aqua');
       await interaction.editReply({ embeds: [embed] });
+    } else if (commandName === 'give') {
+      await interaction.deferReply({ ephemeral: true });
+      const adminIds = (process.env.ADMIN_IDS || '').split(',');
+      if (!adminIds.includes(interaction.user.id)) {
+        return await interaction.editReply({ content: '🚫 You do not have permission to use this command.' });
+      }
+
+      const targetUser = interaction.options.getUser('user');
+      const amount = interaction.options.getNumber('amount');
+
+      const { rows } = await db.query('SELECT pool_balance FROM server_stats WHERE id = $1', [interaction.guildId]);
+      const poolBalance = rows[0]?.pool_balance || 0;
+
+      if (amount > poolBalance) {
+        return await interaction.editReply({ content: `❌ Not enough funds in the server pool! The pool only has **${poolBalance.toLocaleString('en-US')}** 💰.` });
+      }
+
+      await db.query('UPDATE server_stats SET pool_balance = pool_balance - $1 WHERE id = $2', [amount, interaction.guildId]);
+      await db.query('INSERT INTO users (id) VALUES ($1) ON CONFLICT (id) DO NOTHING', [targetUser.id]);
+      await db.query('UPDATE users SET balance = balance + $1 WHERE id = $2', [amount, targetUser.id]);
+
+      await interaction.editReply({ content: `✅ Successfully gave **${amount.toLocaleString('en-US')}** 💰 to ${targetUser}.` });
+      logActivity('💸 Admin Give', `<@${interaction.user.id}> gave **${amount.toLocaleString('en-US')}** 💰 to ${targetUser}.`, 'Yellow');
+
+    } else if (commandName === 'take') {
+      await interaction.deferReply({ ephemeral: true });
+      const adminIds = (process.env.ADMIN_IDS || '').split(',');
+      if (!adminIds.includes(interaction.user.id)) {
+        return await interaction.editReply({ content: '🚫 You do not have permission to use this command.' });
+      }
+
+      const targetUser = interaction.options.getUser('user');
+      const amount = interaction.options.getNumber('amount');
+
+      await db.query('INSERT INTO users (id) VALUES ($1) ON CONFLICT (id) DO NOTHING', [targetUser.id]);
+      const { rows } = await db.query('SELECT balance FROM users WHERE id = $1', [targetUser.id]);
+      const currentBalance = rows[0]?.balance || 0;
+      const newBalance = Math.max(0, currentBalance - amount); // Ensure balance doesn't go negative
+      const amountTaken = currentBalance - newBalance;
+
+      await db.query('UPDATE users SET balance = $1 WHERE id = $2', [newBalance, targetUser.id]);
+      await interaction.editReply({ content: `✅ Successfully took **${amountTaken.toLocaleString('en-US')}** 💰 from ${targetUser}. Their new balance is **${newBalance.toLocaleString('en-US')}** 💰.` });
+      logActivity('💸 Admin Take', `<@${interaction.user.id}> took **${amountTaken.toLocaleString('en-US')}** 💰 from ${targetUser}.`, 'Orange');
     }
   } else if (interaction.isModalSubmit()) { // Handle Modal Submissions
     if (interaction.customId.startsWith('buy_modal_')) {

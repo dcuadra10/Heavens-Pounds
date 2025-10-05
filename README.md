@@ -4,7 +4,7 @@ A Discord bot for managing a virtual currency called "Heavenly Pounds", with a s
 
 ## Features
 
-- **Currency System**: Earn Heavenly Pounds through invites (80), messages (20 per 100), voice chat (20 per hour), and boosts (1,000 per boost).
+- **Currency System**: Earn Heavenly Pounds through invites (40), messages (10 per 100), voice chat (10 per hour), and boosts (500 per boost).
 - **Shop**: Exchange Heavenly Pounds for gold, wood, food, or stone.
 - **Admin Commands**: Admins can manage the server pool and run giveaways.
 - **Database Persistence**: Uses SQLite to track user balances and resource inventories.

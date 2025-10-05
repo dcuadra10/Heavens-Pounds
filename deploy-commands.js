@@ -51,6 +51,32 @@ const commands = [
   new SlashCommandBuilder()
     .setName('pool')
     .setDescription('Admin: Check the server pool balance'),
+
+  new SlashCommandBuilder()
+    .setName('give')
+    .setDescription('Admin: Give Heavenly Pounds to a user from the server pool.')
+    .addUserOption(option =>
+      option.setName('user')
+        .setDescription('The user to give currency to.')
+        .setRequired(true))
+    .addNumberOption(option =>
+      option.setName('amount')
+        .setDescription('The amount of Heavenly Pounds to give.')
+        .setRequired(true)
+        .setMinValue(0.01)),
+
+  new SlashCommandBuilder()
+    .setName('take')
+    .setDescription('Admin: Take Heavenly Pounds from a user.')
+    .addUserOption(option =>
+      option.setName('user')
+        .setDescription('The user to take currency from.')
+        .setRequired(true))
+    .addNumberOption(option =>
+      option.setName('amount')
+        .setDescription('The amount of Heavenly Pounds to take.')
+        .setRequired(true)
+        .setMinValue(0.01)),
 ].map(command => command.toJSON());
 
 const rest = new REST({ version: '9' }).setToken(process.env.DISCORD_TOKEN);
