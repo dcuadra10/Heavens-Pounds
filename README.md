@@ -58,6 +58,8 @@ To automatically log all resource purchases to a Google Sheet, follow these step
 - `/stats [user]`: Check your contribution stats.
 - `/leaderboard`: Shows the top 10 users and your rank.
 - `/help`: Shows how to earn currency and lists all commands.
+- `/give <user> <amount>`: (Admin) Give currency to a user from the pool.
+- `/take <user> <amount>`: (Admin) Take currency from a user.
 
 ## 24/7 Deployment (Free Options)
 

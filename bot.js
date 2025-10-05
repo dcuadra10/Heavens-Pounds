@@ -355,6 +355,7 @@ client.on('interactionCreate', async interaction => {
     await interaction.showModal(modal);
 
     } else if (commandName === 'help') {
+      await interaction.deferReply();
       const helpEmbed = new EmbedBuilder()
         .setTitle('❓ Heavenly Pounds Help')
         .setColor('Green')
@@ -383,7 +384,7 @@ client.on('interactionCreate', async interaction => {
                    '`/take <user> <amount>`: Take currency from a user.'
           },
         );
-      interaction.reply({ embeds: [helpEmbed] });
+      await interaction.editReply({ embeds: [helpEmbed] });
     }  else if (commandName === 'daily') {
       await interaction.deferReply();
       const userId = interaction.user.id;
