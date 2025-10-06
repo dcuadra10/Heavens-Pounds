@@ -100,6 +100,11 @@ const commands = [
         .setRequired(false)
         .setMinValue(1)
         .setMaxValue(10))
+    .addNumberOption(option =>
+      option.setName('entry_cost')
+        .setDescription('Cost in Heavenly Pounds to participate (default: 10)')
+        .setRequired(false)
+        .setMinValue(1))
     .addRoleOption(option =>
       option.setName('ping_role')
         .setDescription('Role to ping when giveaway is created (optional)')

@@ -408,7 +408,7 @@ client.on('interactionCreate', async interaction => {
             value: '`/pool`: Check the server pool balance.\n' +
                    '`/give <user> <amount>`: Give currency to a user from the pool.\n' +
                    '`/take <user> <amount>`: Take currency from a user.\n' +
-                   '`/giveaway <prize> <duration> <total_prize> [winners] [ping_role]`: Create a giveaway with total prize amount.'
+                   '`/giveaway <prize> <duration> <total_prize> [winners] [entry_cost] [ping_role]`: Create a giveaway with flexible prize and entry cost.'
           },
           {
             name: '🎁 Giveaways',
@@ -617,6 +617,7 @@ client.on('interactionCreate', async interaction => {
       const duration = interaction.options.getString('duration');
       const totalPrize = interaction.options.getNumber('total_prize');
       const winnerCount = interaction.options.getInteger('winners') || 1;
+      const entryCost = interaction.options.getNumber('entry_cost') || 10; // Default to 10 if not specified
       const pingRole = interaction.options.getRole('ping_role');
 
       const modal = new ModalBuilder()
@@ -647,6 +648,14 @@ client.on('interactionCreate', async interaction => {
         .setStyle(TextInputStyle.Short)
         .setRequired(true);
 
+      const entryCostInput = new TextInputBuilder()
+        .setCustomId('giveaway_entry_cost')
+        .setLabel('Entry Cost (Heavenly Pounds)')
+        .setPlaceholder('Enter the cost to participate...')
+        .setValue(entryCost.toString())
+        .setStyle(TextInputStyle.Short)
+        .setRequired(true);
+
       const winnersInput = new TextInputBuilder()
         .setCustomId('giveaway_winners')
         .setLabel('Number of Winners')
@@ -659,6 +668,7 @@ client.on('interactionCreate', async interaction => {
         new ActionRowBuilder().addComponents(prizeInput),
         new ActionRowBuilder().addComponents(durationInput),
         new ActionRowBuilder().addComponents(totalPrizeInput),
+        new ActionRowBuilder().addComponents(entryCostInput),
         new ActionRowBuilder().addComponents(winnersInput)
       );
 
@@ -705,10 +715,15 @@ client.on('interactionCreate', async interaction => {
       const prize = interaction.fields.getTextInputValue('giveaway_prize');
       const durationStr = interaction.fields.getTextInputValue('giveaway_duration');
       const totalPrize = parseFloat(interaction.fields.getTextInputValue('giveaway_total_prize'));
+      const entryCost = parseFloat(interaction.fields.getTextInputValue('giveaway_entry_cost'));
       const winnerCount = parseInt(interaction.fields.getTextInputValue('giveaway_winners'));
 
       if (isNaN(totalPrize) || totalPrize <= 0) {
         return interaction.reply({ content: '⚠️ Please provide a valid total prize amount.', ephemeral: true });
+      }
+
+      if (isNaN(entryCost) || entryCost <= 0) {
+        return interaction.reply({ content: '⚠️ Please provide a valid entry cost.', ephemeral: true });
       }
 
       if (isNaN(winnerCount) || winnerCount <= 0) {
@@ -743,12 +758,11 @@ client.on('interactionCreate', async interaction => {
       // Create giveaway embed
       const giveawayEmbed = new EmbedBuilder()
         .setTitle('🎉 Giveaway! 🎉')
-        .setDescription(`**Prize:** ${prize}\n**Total Prize:** ${totalPrize.toLocaleString('en-US')} 💰\n**Prize per Winner:** ${prizePerWinner.toLocaleString('en-US')} 💰\n**Winners:** ${winnerCount}\n**Ends:** <t:${Math.floor(endTime / 1000)}:R>`)
+        .setDescription(`**Prize:** ${prize}\n**Total Prize:** ${totalPrize.toLocaleString('en-US')} 💰\n**Prize per Winner:** ${prizePerWinner.toLocaleString('en-US')} 💰\n**Entry Cost:** ${entryCost.toLocaleString('en-US')} 💰\n**Winners:** ${winnerCount}\n**Ends:** <t:${Math.floor(endTime / 1000)}:R>`)
         .setColor('Gold')
         .setFooter({ text: `Giveaway ID: ${giveawayId}` })
         .setTimestamp();
 
-      const entryCost = 10; // Fixed entry cost
       const joinButton = new ButtonBuilder()
         .setCustomId(`join_giveaway_${giveawayId}`)
         .setLabel(`Join Giveaway (${entryCost.toLocaleString('en-US')} 💰)`)
