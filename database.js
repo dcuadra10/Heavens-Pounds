@@ -69,6 +69,24 @@ async function initializeDatabase() {
       )
     `);
 
+    // Giveaways
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS giveaways (
+        id TEXT PRIMARY KEY,
+        guild_id TEXT NOT NULL,
+        channel_id TEXT NOT NULL,
+        message_id TEXT,
+        prize TEXT NOT NULL,
+        entry_cost REAL NOT NULL,
+        winner_count INTEGER NOT NULL,
+        end_time TIMESTAMP NOT NULL,
+        creator_id TEXT NOT NULL,
+        participants TEXT[] DEFAULT '{}',
+        winners TEXT[] DEFAULT '{}',
+        ended BOOLEAN DEFAULT FALSE
+      )
+    `);
+
     console.log('Database tables checked/created successfully.');
   } catch (err) {
     console.error('Error initializing database:', err);

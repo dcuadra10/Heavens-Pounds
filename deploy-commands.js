@@ -77,6 +77,29 @@ const commands = [
         .setDescription('The amount of Heavenly Pounds to take.')
         .setRequired(true)
         .setMinValue(0.01)),
+
+  new SlashCommandBuilder()
+    .setName('giveaway')
+    .setDescription('Admin: Create a paid giveaway')
+    .addStringOption(option =>
+      option.setName('prize')
+        .setDescription('Description of the giveaway prize')
+        .setRequired(true))
+    .addStringOption(option =>
+      option.setName('duration')
+        .setDescription('How long the giveaway should last (e.g., 1h, 30m, 2d)')
+        .setRequired(true))
+    .addNumberOption(option =>
+      option.setName('entry_cost')
+        .setDescription('Cost in Heavenly Pounds to participate')
+        .setRequired(true)
+        .setMinValue(1))
+    .addIntegerOption(option =>
+      option.setName('winners')
+        .setDescription('Number of winners (default: 1)')
+        .setRequired(false)
+        .setMinValue(1)
+        .setMaxValue(10)),
 ].map(command => command.toJSON());
 
 const rest = new REST({ version: '9' }).setToken(process.env.DISCORD_TOKEN);

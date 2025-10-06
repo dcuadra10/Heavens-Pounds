@@ -205,9 +205,9 @@ client.on('guildMemberAdd', async member => {
   });
   if (inviterId && inviterId !== member.id) { // avoid self
     await db.query('INSERT INTO users (id) VALUES ($1) ON CONFLICT (id) DO NOTHING', [inviterId]);
-    await db.query('UPDATE users SET balance = balance + 40 WHERE id = $1', [inviterId]);
+    await db.query('UPDATE users SET balance = balance + 20 WHERE id = $1', [inviterId]);
     await db.query('INSERT INTO invites (user_id, invites) VALUES ($1, 1) ON CONFLICT (user_id) DO UPDATE SET invites = invites.invites + 1', [inviterId]);
-    logActivity('💌 Invite Reward', `<@${inviterId}> received **40** Heavenly Pounds for inviting ${member.user.tag}.`, 'Green');
+    logActivity('💌 Invite Reward', `<@${inviterId}> received **20** Heavenly Pounds for inviting ${member.user.tag}.`, 'Green');
   }
 });
 
@@ -229,7 +229,7 @@ client.on('messageCreate', async message => {
   
   if (unrewardedCount >= 100) {
       const rewardsToGive = Math.floor(unrewardedCount / 100);
-      const totalReward = rewardsToGive * 10;
+      const totalReward = rewardsToGive * 5;
       await db.query('UPDATE users SET balance = balance + $1 WHERE id = $2', [totalReward, message.author.id]);
       await db.query('UPDATE message_counts SET rewarded_messages = rewarded_messages + $1 WHERE user_id = $2', [rewardsToGive * 100, message.author.id]);
       logActivity('💬 Message Reward', `<@${message.author.id}> received **${totalReward}** Heavenly Pounds for sending ${rewardsToGive * 100} messages.`, 'Green');
@@ -260,7 +260,7 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
 
         if (unrewardedMinutes >= 60) {
           const rewardsToGive = Math.floor(unrewardedMinutes / 60);
-          const totalReward = rewardsToGive * 10;
+          const totalReward = rewardsToGive * 5;
           await db.query('UPDATE users SET balance = balance + $1 WHERE id = $2', [totalReward, member.id]);
           await db.query('UPDATE voice_times SET rewarded_minutes = rewarded_minutes + $1 WHERE user_id = $2', [rewardsToGive * 60, member.id]);
           logActivity('🎤 Voice Chat Reward', `<@${member.id}> received **${totalReward}** Heavenly Pounds for spending ${rewardsToGive * 60} minutes in voice chat.`, 'Green');
@@ -362,9 +362,9 @@ client.on('interactionCreate', async interaction => {
         .addFields(
           {
             name: '💸 How to Earn Heavenly Pounds',
-            value: '- **Invites**: Earn **40** 💰 for each person you invite.\n' +
-                   '- **Messages**: Earn **10** 💰 for every 100 messages you send.\n' +
-                   '- **Voice Chat**: Earn **10** 💰 for every hour you spend in a voice channel.\n' +
+            value: '- **Invites**: Earn **20** 💰 for each person you invite.\n' +
+                   '- **Messages**: Earn **5** 💰 for every 100 messages you send.\n' +
+                   '- **Voice Chat**: Earn **5** 💰 for every hour you spend in a voice channel.\n' +
                    '- **Server Boosts**: Earn **500** 💰 for each time you boost the server.'
           },
           {
@@ -381,7 +381,15 @@ client.on('interactionCreate', async interaction => {
             name: '⚙️ Admin Commands',
             value: '`/pool`: Check the server pool balance.\n' +
                    '`/give <user> <amount>`: Give currency to a user from the pool.\n' +
-                   '`/take <user> <amount>`: Take currency from a user.'
+                   '`/take <user> <amount>`: Take currency from a user.\n' +
+                   '`/giveaway <prize> <duration> <entry_cost> [winners]`: Create a paid giveaway.'
+          },
+          {
+            name: '🎁 Giveaways',
+            value: 'Giveaways allow users to pay Heavenly Pounds to participate and win prizes!\n' +
+                   '- Entry costs are paid from your balance and added to the server pool\n' +
+                   '- Winners receive the prize amount from the server pool\n' +
+                   '- Only admins can create giveaways'
           },
         );
       await interaction.editReply({ embeds: [helpEmbed] });
@@ -572,6 +580,61 @@ client.on('interactionCreate', async interaction => {
       await db.query('UPDATE users SET balance = $1 WHERE id = $2', [newBalance, targetUser.id]);
       await interaction.editReply({ content: `✅ Successfully took **${amountTaken.toLocaleString('en-US')}** 💰 from ${targetUser}. Their new balance is **${newBalance.toLocaleString('en-US')}** 💰.` });
       logActivity('💸 Admin Take', `<@${interaction.user.id}> took **${amountTaken.toLocaleString('en-US')}** 💰 from ${targetUser}. The amount was added to the server pool.`, 'Orange');
+    } else if (commandName === 'giveaway') {
+      const adminIds = (process.env.ADMIN_IDS || '').split(',');
+      if (!adminIds.includes(interaction.user.id)) {
+        return interaction.reply('🚫 You do not have permission to use this command.');
+      }
+
+      const prize = interaction.options.getString('prize');
+      const duration = interaction.options.getString('duration');
+      const entryCost = interaction.options.getNumber('entry_cost');
+      const winnerCount = interaction.options.getInteger('winners') || 1;
+
+      const modal = new ModalBuilder()
+        .setCustomId(`giveaway_modal_${Date.now()}`)
+        .setTitle('Create Giveaway');
+
+      const prizeInput = new TextInputBuilder()
+        .setCustomId('giveaway_prize')
+        .setLabel('Prize Description')
+        .setPlaceholder('Enter the giveaway prize...')
+        .setValue(prize)
+        .setStyle(TextInputStyle.Short)
+        .setRequired(true);
+
+      const durationInput = new TextInputBuilder()
+        .setCustomId('giveaway_duration')
+        .setLabel('Duration (e.g., 1h, 30m, 2d)')
+        .setPlaceholder('1h, 30m, 2d...')
+        .setValue(duration)
+        .setStyle(TextInputStyle.Short)
+        .setRequired(true);
+
+      const entryCostInput = new TextInputBuilder()
+        .setCustomId('giveaway_entry_cost')
+        .setLabel('Entry Cost (Heavenly Pounds)')
+        .setPlaceholder('Enter the cost to participate...')
+        .setValue(entryCost.toString())
+        .setStyle(TextInputStyle.Short)
+        .setRequired(true);
+
+      const winnersInput = new TextInputBuilder()
+        .setCustomId('giveaway_winners')
+        .setLabel('Number of Winners')
+        .setPlaceholder('1')
+        .setValue(winnerCount.toString())
+        .setStyle(TextInputStyle.Short)
+        .setRequired(true);
+
+      modal.addComponents(
+        new ActionRowBuilder().addComponents(prizeInput),
+        new ActionRowBuilder().addComponents(durationInput),
+        new ActionRowBuilder().addComponents(entryCostInput),
+        new ActionRowBuilder().addComponents(winnersInput)
+      );
+
+      await interaction.showModal(modal);
     }
   } else if (interaction.isModalSubmit()) { // Handle Modal Submissions
     if (interaction.customId.startsWith('buy_modal_')) {
@@ -610,6 +673,72 @@ client.on('interactionCreate', async interaction => {
         components: [row],
         flags: [MessageFlags.Ephemeral],
       });
+    } else if (interaction.customId.startsWith('giveaway_modal_')) {
+      const prize = interaction.fields.getTextInputValue('giveaway_prize');
+      const durationStr = interaction.fields.getTextInputValue('giveaway_duration');
+      const entryCost = parseFloat(interaction.fields.getTextInputValue('giveaway_entry_cost'));
+      const winnerCount = parseInt(interaction.fields.getTextInputValue('giveaway_winners'));
+
+      if (isNaN(entryCost) || entryCost <= 0) {
+        return interaction.reply({ content: '⚠️ Please provide a valid entry cost.', ephemeral: true });
+      }
+
+      if (isNaN(winnerCount) || winnerCount <= 0) {
+        return interaction.reply({ content: '⚠️ Please provide a valid number of winners.', ephemeral: true });
+      }
+
+      const duration = parseDuration(durationStr);
+      if (!duration) {
+        return interaction.reply({ content: '⚠️ Please provide a valid duration (e.g., 1h, 30m, 2d).', ephemeral: true });
+      }
+
+      const endTime = Date.now() + duration;
+      const giveawayId = `giveaway_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+      // Check if server pool has enough funds
+      const { rows } = await db.query('SELECT pool_balance FROM server_stats WHERE id = $1', [interaction.guildId]);
+      const poolBalance = rows[0]?.pool_balance || 0;
+
+      if (poolBalance < entryCost * winnerCount) {
+        return interaction.reply({ 
+          content: `❌ Not enough funds in server pool! Need **${(entryCost * winnerCount).toLocaleString('en-US')}** 💰 but pool only has **${poolBalance.toLocaleString('en-US')}** 💰.`, 
+          ephemeral: true 
+        });
+      }
+
+      // Deduct funds from pool
+      await db.query('UPDATE server_stats SET pool_balance = pool_balance - $1 WHERE id = $2', [entryCost * winnerCount, interaction.guildId]);
+
+      // Create giveaway embed
+      const giveawayEmbed = new EmbedBuilder()
+        .setTitle('🎉 Giveaway! 🎉')
+        .setDescription(`**Prize:** ${prize}\n**Entry Cost:** ${entryCost.toLocaleString('en-US')} 💰\n**Winners:** ${winnerCount}\n**Ends:** <t:${Math.floor(endTime / 1000)}:R>`)
+        .setColor('Gold')
+        .setFooter({ text: `Giveaway ID: ${giveawayId}` })
+        .setTimestamp();
+
+      const joinButton = new ButtonBuilder()
+        .setCustomId(`join_giveaway_${giveawayId}`)
+        .setLabel(`Join Giveaway (${entryCost.toLocaleString('en-US')} 💰)`)
+        .setStyle(ButtonStyle.Primary)
+        .setEmoji('🎁');
+
+      const row = new ActionRowBuilder().addComponents(joinButton);
+
+      await interaction.reply({ embeds: [giveawayEmbed], components: [row] });
+
+      // Store giveaway in database
+      await db.query(`
+        INSERT INTO giveaways (id, guild_id, channel_id, message_id, prize, entry_cost, winner_count, end_time, creator_id, participants)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      `, [giveawayId, interaction.guildId, interaction.channelId, null, prize, entryCost, winnerCount, new Date(endTime), interaction.user.id, []]);
+
+      // Set timeout to end giveaway
+      setTimeout(async () => {
+        await endGiveaway(giveawayId);
+      }, duration);
+
+      logActivity('🎁 Giveaway Created', `<@${interaction.user.id}> created a giveaway: **${prize}** (${entryCost.toLocaleString('en-US')} 💰 entry, ${winnerCount} winner(s))`, 'Gold');
     }
   } else if (interaction.isButton()) { // Handle Button Clicks
     await interaction.deferUpdate(); // Acknowledge the button click immediately
@@ -629,6 +758,61 @@ client.on('interactionCreate', async interaction => {
           .then(() => logPurchaseToSheet(interaction.user.username, resource, resourceAmount, cost));
     } else if (interaction.customId === 'cancel_buy') {
       await interaction.editReply({ content: 'Purchase canceled.', embeds: [], components: [] });
+    } else if (interaction.customId.startsWith('join_giveaway_')) {
+      const giveawayId = interaction.customId.replace('join_giveaway_', '');
+      
+      try {
+        // Get giveaway info
+        const { rows } = await db.query('SELECT * FROM giveaways WHERE id = $1', [giveawayId]);
+        if (rows.length === 0) {
+          return interaction.editReply({ content: '❌ Giveaway not found or has ended.', embeds: [], components: [] });
+        }
+
+        const giveaway = rows[0];
+        
+        // Check if giveaway has ended
+        if (new Date() > new Date(giveaway.end_time)) {
+          return interaction.editReply({ content: '❌ This giveaway has already ended.', embeds: [], components: [] });
+        }
+
+        // Check if user already joined
+        const participants = giveaway.participants || [];
+        if (participants.includes(interaction.user.id)) {
+          return interaction.editReply({ content: '❌ You have already joined this giveaway!', embeds: [], components: [] });
+        }
+
+        // Check if user has enough balance
+        const { rows: userRows } = await db.query('SELECT balance FROM users WHERE id = $1', [interaction.user.id]);
+        const userBalance = userRows[0]?.balance || 0;
+
+        if (userBalance < giveaway.entry_cost) {
+          return interaction.editReply({ 
+            content: `❌ You need **${giveaway.entry_cost.toLocaleString('en-US')}** 💰 to join this giveaway. You only have **${userBalance.toLocaleString('en-US')}** 💰.`, 
+            embeds: [], 
+            components: [] 
+          });
+        }
+
+        // Deduct entry cost from user and add to pool
+        await db.query('UPDATE users SET balance = balance - $1 WHERE id = $2', [giveaway.entry_cost, interaction.user.id]);
+        await db.query('UPDATE server_stats SET pool_balance = pool_balance + $1 WHERE id = $2', [giveaway.entry_cost, interaction.guildId]);
+
+        // Add user to participants
+        participants.push(interaction.user.id);
+        await db.query('UPDATE giveaways SET participants = $1 WHERE id = $2', [participants, giveawayId]);
+
+        await interaction.editReply({ 
+          content: `✅ You have successfully joined the giveaway! **${giveaway.entry_cost.toLocaleString('en-US')}** 💰 has been deducted from your balance.`, 
+          embeds: [], 
+          components: [] 
+        });
+
+        logActivity('🎁 Giveaway Joined', `<@${interaction.user.id}> joined giveaway **${giveaway.prize}** for **${giveaway.entry_cost.toLocaleString('en-US')}** 💰.`, 'Blue');
+
+      } catch (error) {
+        console.error('Error joining giveaway:', error);
+        await interaction.editReply({ content: '❌ An error occurred while joining the giveaway.', embeds: [], components: [] });
+      }
     }
   }
 });
@@ -675,6 +859,64 @@ function setupHealthchecksPing() {
   setInterval(ping, 50 * 1000); // 50 seconds
 }
 
+
+// --- Giveaway Functions ---
+async function endGiveaway(giveawayId) {
+  try {
+    const { rows } = await db.query('SELECT * FROM giveaways WHERE id = $1 AND ended = FALSE', [giveawayId]);
+    if (rows.length === 0) return;
+
+    const giveaway = rows[0];
+    const participants = giveaway.participants || [];
+
+    if (participants.length === 0) {
+      // No participants, refund to pool
+      await db.query('UPDATE server_stats SET pool_balance = pool_balance + $1 WHERE id = $2', [giveaway.entry_cost * giveaway.winner_count, giveaway.guild_id]);
+      await db.query('UPDATE giveaways SET ended = TRUE WHERE id = $1', [giveawayId]);
+      
+      const channel = await client.channels.fetch(giveaway.channel_id);
+      if (channel) {
+        const embed = new EmbedBuilder()
+          .setTitle('🎉 Giveaway Ended')
+          .setDescription(`**Prize:** ${giveaway.prize}\n**Result:** No participants joined this giveaway.\n**Refund:** ${(giveaway.entry_cost * giveaway.winner_count).toLocaleString('en-US')} 💰 returned to server pool.`)
+          .setColor('Red')
+          .setTimestamp();
+        await channel.send({ embeds: [embed] });
+      }
+      return;
+    }
+
+    // Select winners
+    const shuffled = participants.sort(() => 0.5 - Math.random());
+    const winners = shuffled.slice(0, Math.min(giveaway.winner_count, participants.length));
+
+    // Give rewards to winners
+    for (const winnerId of winners) {
+      await db.query('INSERT INTO users (id) VALUES ($1) ON CONFLICT (id) DO NOTHING', [winnerId]);
+      await db.query('UPDATE users SET balance = balance + $1 WHERE id = $2', [giveaway.entry_cost, winnerId]);
+    }
+
+    // Update giveaway as ended
+    await db.query('UPDATE giveaways SET ended = TRUE, winners = $1 WHERE id = $2', [winners, giveawayId]);
+
+    // Send result message
+    const channel = await client.channels.fetch(giveaway.channel_id);
+    if (channel) {
+      const winnerMentions = winners.map(id => `<@${id}>`).join(', ');
+      const embed = new EmbedBuilder()
+        .setTitle('🎉 Giveaway Ended! 🎉')
+        .setDescription(`**Prize:** ${giveaway.prize}\n**Entry Cost:** ${giveaway.entry_cost.toLocaleString('en-US')} 💰\n**Participants:** ${participants.length}\n**Winner(s):** ${winnerMentions}\n\nEach winner received **${giveaway.entry_cost.toLocaleString('en-US')}** 💰!`)
+        .setColor('Gold')
+        .setTimestamp();
+      await channel.send({ embeds: [embed] });
+    }
+
+    logActivity('🎁 Giveaway Ended', `Giveaway **${giveaway.prize}** ended with ${participants.length} participants. Winners: ${winners.join(', ')}`, 'Gold');
+
+  } catch (error) {
+    console.error('Error ending giveaway:', error);
+  }
+}
 
 async function startBot() {
   try {
