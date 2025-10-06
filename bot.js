@@ -564,7 +564,7 @@ client.on('interactionCreate', async interaction => {
         .setColor('Aqua');
       await interaction.editReply({ embeds: [embed] });
     } else if (commandName === 'give') {
-      await interaction.deferReply({ ephemeral: true });
+      await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
       const adminIds = (process.env.ADMIN_IDS || '').split(',');
       if (!adminIds.includes(interaction.user.id)) {
         return await interaction.editReply({ content: '🚫 You do not have permission to use this command.' });
@@ -588,7 +588,7 @@ client.on('interactionCreate', async interaction => {
       logActivity('💸 Admin Give', `<@${interaction.user.id}> gave **${amount.toLocaleString('en-US')}** 💰 to ${targetUser}.`, 'Yellow');
 
     } else if (commandName === 'take') {
-      await interaction.deferReply({ ephemeral: true });
+      await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
       const adminIds = (process.env.ADMIN_IDS || '').split(',');
       if (!adminIds.includes(interaction.user.id)) {
         return await interaction.editReply({ content: '🚫 You do not have permission to use this command.' });
@@ -620,7 +620,7 @@ client.on('interactionCreate', async interaction => {
       const pingRole = interaction.options.getRole('ping_role');
 
       const modal = new ModalBuilder()
-        .setCustomId(`giveaway_modal_${Date.now()}`)
+        .setCustomId(`giveaway_modal_${Date.now()}_${pingRole?.id || 'none'}`)
         .setTitle('Create Giveaway');
 
       const durationInput = new TextInputBuilder()
@@ -706,22 +706,26 @@ client.on('interactionCreate', async interaction => {
       const totalPrize = parseFloat(interaction.fields.getTextInputValue('giveaway_total_prize'));
       const entryCost = parseFloat(interaction.fields.getTextInputValue('giveaway_entry_cost'));
       const winnerCount = parseInt(interaction.fields.getTextInputValue('giveaway_winners'));
+      
+      // Extract pingRole from customId
+      const pingRoleId = interaction.customId.split('_')[3];
+      const pingRole = pingRoleId && pingRoleId !== 'none' ? interaction.guild.roles.cache.get(pingRoleId) : null;
 
       if (isNaN(totalPrize) || totalPrize <= 0) {
-        return interaction.reply({ content: '⚠️ Please provide a valid total prize amount.', ephemeral: true });
+        return interaction.reply({ content: '⚠️ Please provide a valid total prize amount.', flags: [MessageFlags.Ephemeral] });
       }
 
       if (isNaN(entryCost) || entryCost <= 0) {
-        return interaction.reply({ content: '⚠️ Please provide a valid entry cost.', ephemeral: true });
+        return interaction.reply({ content: '⚠️ Please provide a valid entry cost.', flags: [MessageFlags.Ephemeral] });
       }
 
       if (isNaN(winnerCount) || winnerCount <= 0) {
-        return interaction.reply({ content: '⚠️ Please provide a valid number of winners.', ephemeral: true });
+        return interaction.reply({ content: '⚠️ Please provide a valid number of winners.', flags: [MessageFlags.Ephemeral] });
       }
 
       const duration = parseDuration(durationStr);
       if (!duration) {
-        return interaction.reply({ content: '⚠️ Please provide a valid duration (e.g., 1h, 30m, 2d).', ephemeral: true });
+        return interaction.reply({ content: '⚠️ Please provide a valid duration (e.g., 1h, 30m, 2d).', flags: [MessageFlags.Ephemeral] });
       }
 
       const endTime = Date.now() + duration;
@@ -737,7 +741,7 @@ client.on('interactionCreate', async interaction => {
       if (poolBalance < totalPrize) {
         return interaction.reply({ 
           content: `❌ Not enough funds in server pool! Need **${totalPrize.toLocaleString('en-US')}** 💰 but pool only has **${poolBalance.toLocaleString('en-US')}** 💰.`, 
-          ephemeral: true 
+          flags: [MessageFlags.Ephemeral] 
         });
       }
 
@@ -763,9 +767,11 @@ client.on('interactionCreate', async interaction => {
       // Send the giveaway message
       const giveawayMessage = await interaction.reply({ 
         embeds: [giveawayEmbed], 
-        components: [row],
-        fetchReply: true 
+        components: [row]
       });
+      
+      // Get the reply message for database storage
+      const replyMessage = await interaction.fetchReply();
 
       // Ping the role if specified
       if (pingRole) {
@@ -779,7 +785,7 @@ client.on('interactionCreate', async interaction => {
       await db.query(`
         INSERT INTO giveaways (id, guild_id, channel_id, message_id, entry_cost, total_prize, winner_count, end_time, creator_id, participants, required_role_id)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-      `, [giveawayId, interaction.guildId, interaction.channelId, null, entryCost, totalPrize, winnerCount, new Date(endTime), interaction.user.id, [], null]);
+      `, [giveawayId, interaction.guildId, interaction.channelId, replyMessage.id, entryCost, totalPrize, winnerCount, new Date(endTime), interaction.user.id, [], null]);
 
       // Set timeout to end giveaway
       setTimeout(async () => {
@@ -790,7 +796,7 @@ client.on('interactionCreate', async interaction => {
     }
   } else if (interaction.isButton()) { // Handle Button Clicks
     if (interaction.customId.startsWith('join_giveaway_')) {
-      await interaction.deferReply({ ephemeral: true }); // Don't delete the message
+      await interaction.deferReply({ flags: [MessageFlags.Ephemeral] }); // Don't delete the message
     } else {
       await interaction.deferUpdate(); // Acknowledge the button click immediately
     }
