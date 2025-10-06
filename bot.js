@@ -777,9 +777,9 @@ client.on('interactionCreate', async interaction => {
 
       // Store giveaway in database
       await db.query(`
-        INSERT INTO giveaways (id, guild_id, channel_id, message_id, prize, entry_cost, total_prize, winner_count, end_time, creator_id, participants, required_role_id)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-      `, [giveawayId, interaction.guildId, interaction.channelId, null, `Giveaway - ${totalPrize.toLocaleString('en-US')} 💰`, entryCost, totalPrize, winnerCount, new Date(endTime), interaction.user.id, [], null]);
+        INSERT INTO giveaways (id, guild_id, channel_id, message_id, entry_cost, total_prize, winner_count, end_time, creator_id, participants, required_role_id)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      `, [giveawayId, interaction.guildId, interaction.channelId, null, entryCost, totalPrize, winnerCount, new Date(endTime), interaction.user.id, [], null]);
 
       // Set timeout to end giveaway
       setTimeout(async () => {

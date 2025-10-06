@@ -76,7 +76,6 @@ async function initializeDatabase() {
         guild_id TEXT NOT NULL,
         channel_id TEXT NOT NULL,
         message_id TEXT,
-        prize TEXT NOT NULL,
         entry_cost REAL NOT NULL,
         total_prize REAL NOT NULL DEFAULT 0,
         winner_count INTEGER NOT NULL,
