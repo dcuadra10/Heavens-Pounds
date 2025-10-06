@@ -90,8 +90,8 @@ const commands = [
         .setDescription('How long the giveaway should last (e.g., 1h, 30m, 2d)')
         .setRequired(true))
     .addNumberOption(option =>
-      option.setName('entry_cost')
-        .setDescription('Cost in Heavenly Pounds to participate')
+      option.setName('total_prize')
+        .setDescription('Total amount of Heavenly Pounds to be distributed among winners')
         .setRequired(true)
         .setMinValue(1))
     .addIntegerOption(option =>
@@ -99,7 +99,11 @@ const commands = [
         .setDescription('Number of winners (default: 1)')
         .setRequired(false)
         .setMinValue(1)
-        .setMaxValue(10)),
+        .setMaxValue(10))
+    .addRoleOption(option =>
+      option.setName('ping_role')
+        .setDescription('Role to ping when giveaway is created (optional)')
+        .setRequired(false)),
 ].map(command => command.toJSON());
 
 const rest = new REST({ version: '9' }).setToken(process.env.DISCORD_TOKEN);

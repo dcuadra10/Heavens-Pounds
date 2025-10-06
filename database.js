@@ -78,12 +78,25 @@ async function initializeDatabase() {
         message_id TEXT,
         prize TEXT NOT NULL,
         entry_cost REAL NOT NULL,
+        total_prize REAL NOT NULL DEFAULT 0,
         winner_count INTEGER NOT NULL,
         end_time TIMESTAMP NOT NULL,
         creator_id TEXT NOT NULL,
         participants TEXT[] DEFAULT '{}',
         winners TEXT[] DEFAULT '{}',
-        ended BOOLEAN DEFAULT FALSE
+        ended BOOLEAN DEFAULT FALSE,
+        required_role_id TEXT
+      )
+    `);
+
+    // Giveaway participation rewards tracking
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS giveaway_rewards (
+        id SERIAL PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        giveaway_id TEXT NOT NULL,
+        reward_given BOOLEAN DEFAULT FALSE,
+        UNIQUE(user_id, giveaway_id)
       )
     `);
 
