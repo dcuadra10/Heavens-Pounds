@@ -88,6 +88,24 @@ async function initializeDatabase() {
       )
     `);
 
+    // Migration: Add total_prize column if it doesn't exist
+    try {
+      await client.query('ALTER TABLE giveaways ADD COLUMN total_prize REAL NOT NULL DEFAULT 0');
+    } catch (err) {
+      // Column already exists, ignore error
+      if (!err.message.includes('already exists')) {
+        console.log('Migration note:', err.message);
+      }
+    }
+
+    // Migration: Remove prize column if it exists
+    try {
+      await client.query('ALTER TABLE giveaways DROP COLUMN IF EXISTS prize');
+    } catch (err) {
+      // Column doesn't exist, ignore error
+      console.log('Migration note:', err.message);
+    }
+
     // Giveaway participation rewards tracking
     await client.query(`
       CREATE TABLE IF NOT EXISTS giveaway_rewards (

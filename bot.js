@@ -764,22 +764,20 @@ client.on('interactionCreate', async interaction => {
 
       const row = new ActionRowBuilder().addComponents(joinButton);
 
+      // Prepare content with ping if role is specified
+      const content = pingRole ? `${pingRole} **New Giveaway Available!** 🎉` : undefined;
+      const allowedMentions = pingRole ? { roles: [pingRole.id] } : undefined;
+
       // Send the giveaway message
       const giveawayMessage = await interaction.reply({ 
+        content: content,
         embeds: [giveawayEmbed], 
-        components: [row]
+        components: [row],
+        allowedMentions: allowedMentions
       });
       
       // Get the reply message for database storage
       const replyMessage = await interaction.fetchReply();
-
-      // Ping the role if specified
-      if (pingRole) {
-        await interaction.followUp({ 
-          content: `${pingRole} **¡Nuevo Giveaway disponible!** 🎉`, 
-          allowedMentions: { roles: [pingRole.id] }
-        });
-      }
 
       // Store giveaway in database
       await db.query(`
@@ -1054,16 +1052,23 @@ async function endGiveaway(giveawayId) {
     // Update giveaway as ended
     await db.query('UPDATE giveaways SET ended = TRUE, winners = $1 WHERE id = $2', [winners, giveawayId]);
 
-    // Send result message
+    // Send winner announcement message
     const channel = await client.channels.fetch(giveaway.channel_id);
     if (channel) {
       const winnerMentions = winners.map(id => `<@${id}>`).join(', ');
-      const embed = new EmbedBuilder()
-        .setTitle('🎉 Giveaway Ended! 🎉')
-        .setDescription(`**Total Prize:** ${(giveaway.total_prize || giveaway.entry_cost * giveaway.winner_count).toLocaleString('en-US')} 💰\n**Participants:** ${participants.length}\n**Winner(s):** ${winnerMentions}\n\nEach winner received **${prizePerWinner.toLocaleString('en-US')}** 💰!`)
+      const totalPrize = giveaway.total_prize || giveaway.entry_cost * giveaway.winner_count;
+      
+      const winnerEmbed = new EmbedBuilder()
+        .setTitle('🎉 GIVEAWAY ENDED! 🎉')
+        .setDescription(`**🎁 Total Prize Pool:** ${totalPrize.toLocaleString('en-US')} 💰\n**👥 Participants:** ${participants.length}\n**🏆 Winner(s):** ${winnerMentions}\n\n**💰 Each winner received:** ${prizePerWinner.toLocaleString('en-US')} 💰!\n\nCongratulations to the winners! 🎊`)
         .setColor('Gold')
+        .setFooter({ text: `Giveaway ID: ${giveawayId}` })
         .setTimestamp();
-      await channel.send({ embeds: [embed] });
+      
+      await channel.send({ 
+        content: `🎉 **GIVEAWAY RESULTS** 🎉\n\n**Winner(s):** ${winnerMentions}\n\nCongratulations! 🎊`,
+        embeds: [winnerEmbed] 
+      });
     }
 
     logActivity('🎁 Giveaway Ended', `Giveaway **${(giveaway.total_prize || giveaway.entry_cost * giveaway.winner_count).toLocaleString('en-US')} 💰** ended with ${participants.length} participants. Winners: ${winners.join(', ')}`, 'Gold');
