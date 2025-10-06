@@ -82,10 +82,6 @@ const commands = [
     .setName('giveaway')
     .setDescription('Admin: Create a paid giveaway')
     .addStringOption(option =>
-      option.setName('prize')
-        .setDescription('Description of the giveaway prize')
-        .setRequired(true))
-    .addStringOption(option =>
       option.setName('duration')
         .setDescription('How long the giveaway should last (e.g., 1h, 30m, 2d)')
         .setRequired(true))
