@@ -298,6 +298,32 @@ client.on('guildMemberUpdate', async (oldMember, newMember) => {
   }
 });
 
+client.on('messageDelete', async (message) => {
+  // Check if this is a giveaway message
+  if (!message.embeds || message.embeds.length === 0) return;
+  
+  const embed = message.embeds[0];
+  if (!embed.footer || !embed.footer.text || !embed.footer.text.startsWith('Giveaway ID:')) return;
+  
+  const giveawayId = embed.footer.text.replace('Giveaway ID: ', '');
+  
+  try {
+    // Find the giveaway in database
+    const { rows } = await db.query('SELECT * FROM giveaways WHERE id = $1 AND ended = FALSE', [giveawayId]);
+    if (rows.length === 0) return;
+    
+    const giveaway = rows[0];
+    
+    // Cancel the giveaway
+    await cancelGiveaway(giveawayId, 'Message deleted');
+    
+    logActivity('❌ Giveaway Cancelled', `Giveaway **${giveaway.prize}** was cancelled because the message was deleted.`, 'Red');
+    
+  } catch (error) {
+    console.error('Error handling giveaway message deletion:', error);
+  }
+});
+
 client.on('guildCreate', async (guild) => {
   console.log(`Joined a new guild: ${guild.name}`);
   try {
@@ -861,6 +887,50 @@ function setupHealthchecksPing() {
 
 
 // --- Giveaway Functions ---
+async function cancelGiveaway(giveawayId, reason = 'Cancelled') {
+  try {
+    const { rows } = await db.query('SELECT * FROM giveaways WHERE id = $1 AND ended = FALSE', [giveawayId]);
+    if (rows.length === 0) return;
+
+    const giveaway = rows[0];
+    const participants = giveaway.participants || [];
+
+    // Refund all participants
+    for (const participantId of participants) {
+      await db.query('INSERT INTO users (id) VALUES ($1) ON CONFLICT (id) DO NOTHING', [participantId]);
+      await db.query('UPDATE users SET balance = balance + $1 WHERE id = $2', [giveaway.entry_cost, participantId]);
+    }
+
+    // Return the original prize amount to pool (if no participants joined)
+    if (participants.length === 0) {
+      await db.query('UPDATE server_stats SET pool_balance = pool_balance + $1 WHERE id = $2', [giveaway.entry_cost * giveaway.winner_count, giveaway.guild_id]);
+    }
+
+    // Mark giveaway as ended
+    await db.query('UPDATE giveaways SET ended = TRUE WHERE id = $1', [giveawayId]);
+
+    // Send cancellation message to the channel
+    try {
+      const channel = await client.channels.fetch(giveaway.channel_id);
+      if (channel) {
+        const embed = new EmbedBuilder()
+          .setTitle('❌ Giveaway Cancelled')
+          .setDescription(`**Prize:** ${giveaway.prize}\n**Reason:** ${reason}\n**Participants:** ${participants.length}\n\n${participants.length > 0 ? `All participants have been refunded **${giveaway.entry_cost.toLocaleString('en-US')}** 💰 each.` : 'No participants joined this giveaway.'}`)
+          .setColor('Red')
+          .setTimestamp();
+        await channel.send({ embeds: [embed] });
+      }
+    } catch (error) {
+      console.error('Error sending giveaway cancellation message:', error);
+    }
+
+    logActivity('❌ Giveaway Cancelled', `Giveaway **${giveaway.prize}** was cancelled (${reason}). ${participants.length} participants refunded.`, 'Red');
+
+  } catch (error) {
+    console.error('Error cancelling giveaway:', error);
+  }
+}
+
 async function endGiveaway(giveawayId) {
   try {
     const { rows } = await db.query('SELECT * FROM giveaways WHERE id = $1 AND ended = FALSE', [giveawayId]);
