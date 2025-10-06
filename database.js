@@ -106,6 +106,16 @@ async function initializeDatabase() {
       console.log('Migration note:', err.message);
     }
 
+    // Migration: Add required_role_id column if it doesn't exist
+    try {
+      await client.query('ALTER TABLE giveaways ADD COLUMN required_role_id TEXT');
+    } catch (err) {
+      // Column already exists, ignore error
+      if (!err.message.includes('already exists')) {
+        console.log('Migration note:', err.message);
+      }
+    }
+
     // Giveaway participation rewards tracking
     await client.query(`
       CREATE TABLE IF NOT EXISTS giveaway_rewards (
