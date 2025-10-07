@@ -22,6 +22,9 @@ const voiceTimes = new Map(); // userId -> startTime
 // Configuration: Roles that cannot join giveaways (from .env)
 const EXCLUDED_GIVEAWAY_ROLES = (process.env.EXCLUDED_GIVEAWAY_ROLES || 'bot,bots,muted,banned,restricted,excluded').split(',');
 
+// Configuration: Default role to ping for giveaways (from .env)
+const DEFAULT_GIVEAWAY_PING_ROLE = process.env.DEFAULT_GIVEAWAY_PING_ROLE;
+
 // --- Logging Function ---
 async function logActivity(title, message, color = 'Blue') {
   const logChannelId = process.env.LOG_CHANNEL_ID;
@@ -621,7 +624,7 @@ client.on('interactionCreate', async interaction => {
       const totalPrize = interaction.options.getNumber('total_prize');
       const winnerCount = interaction.options.getInteger('winners') || 1;
       const entryCost = interaction.options.getNumber('entry_cost') || 10; // Default to 10 if not specified
-      const pingRole = interaction.options.getRole('ping_role');
+      const pingRole = interaction.options.getRole('ping_role') || (DEFAULT_GIVEAWAY_PING_ROLE ? interaction.guild.roles.cache.get(DEFAULT_GIVEAWAY_PING_ROLE) : null);
 
       const modal = new ModalBuilder()
         .setCustomId(`giveaway_modal_${Date.now()}_${pingRole?.id || 'none'}`)
