@@ -116,16 +116,13 @@ async function initializeDatabase() {
       }
     }
 
-    // Giveaway participation rewards tracking
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS giveaway_rewards (
-        id SERIAL PRIMARY KEY,
-        user_id TEXT NOT NULL,
-        giveaway_id TEXT NOT NULL,
-        reward_given BOOLEAN DEFAULT FALSE,
-        UNIQUE(user_id, giveaway_id)
-      )
-    `);
+    // Migration: Remove giveaway_rewards table if it exists (no longer needed)
+    try {
+      await client.query('DROP TABLE IF EXISTS giveaway_rewards');
+    } catch (err) {
+      // Table doesn't exist, ignore error
+      console.log('Migration note:', err.message);
+    }
 
     console.log('Database tables checked/created successfully.');
   } catch (err) {

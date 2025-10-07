@@ -414,7 +414,6 @@ client.on('interactionCreate', async interaction => {
             name: '🎁 Giveaways',
             value: 'Giveaways allow users to pay Heavenly Pounds to participate and win prizes!\n' +
                    '- Entry costs are paid from your balance and added to the server pool\n' +
-                   '- Participants receive **20** 💰 participation reward immediately\n' +
                    '- Winners receive the prize amount from the server pool\n' +
                    '- Only admins can create giveaways'
           },
@@ -852,13 +851,6 @@ client.on('interactionCreate', async interaction => {
         await db.query('UPDATE users SET balance = balance - $1 WHERE id = $2', [giveaway.entry_cost, interaction.user.id]);
         await db.query('UPDATE server_stats SET pool_balance = pool_balance + $1 WHERE id = $2', [giveaway.entry_cost, interaction.guildId]);
 
-        // Give participation reward (only once per user per giveaway)
-        const { rows: rewardRows } = await db.query('SELECT * FROM giveaway_rewards WHERE user_id = $1 AND giveaway_id = $2', [interaction.user.id, giveawayId]);
-        if (rewardRows.length === 0) {
-          // First time participating in this giveaway - give reward
-          await db.query('UPDATE users SET balance = balance + 20 WHERE id = $1', [interaction.user.id]);
-          await db.query('INSERT INTO giveaway_rewards (user_id, giveaway_id, reward_given) VALUES ($1, $2, TRUE)', [interaction.user.id, giveawayId]);
-        }
 
         // Add user to participants
         participants.push(interaction.user.id);
@@ -868,10 +860,10 @@ client.on('interactionCreate', async interaction => {
         await updateGiveawayEmbed(giveawayId, participants.length);
 
         await interaction.editReply({ 
-          content: `✅ You have successfully joined the giveaway! **${giveaway.entry_cost.toLocaleString('en-US')}** 💰 entry cost deducted, but you received **20** 💰 participation reward!`
+          content: `✅ You have successfully joined the giveaway! **${giveaway.entry_cost.toLocaleString('en-US')}** 💰 entry cost deducted from your balance.`
         });
 
-        logActivity('🎁 Giveaway Joined', `<@${interaction.user.id}> joined giveaway **${giveaway.prize}** for **${giveaway.entry_cost.toLocaleString('en-US')}** 💰 and received **20** 💰 participation reward.`, 'Blue');
+        logActivity('🎁 Giveaway Joined', `<@${interaction.user.id}> joined giveaway for **${giveaway.entry_cost.toLocaleString('en-US')}** 💰 entry cost.`, 'Blue');
 
       } catch (error) {
         console.error('Error joining giveaway:', error);
@@ -977,7 +969,7 @@ async function cancelGiveaway(giveawayId, reason = 'Cancelled') {
     const giveaway = rows[0];
     const participants = giveaway.participants || [];
 
-    // Refund all participants (entry cost only, not the participation reward)
+    // Refund all participants their entry cost
     for (const participantId of participants) {
       await db.query('INSERT INTO users (id) VALUES ($1) ON CONFLICT (id) DO NOTHING', [participantId]);
       await db.query('UPDATE users SET balance = balance + $1 WHERE id = $2', [giveaway.entry_cost, participantId]);
