@@ -19,6 +19,9 @@ const client = new Client({
 const cachedInvites = new Map(); // code -> uses
 const voiceTimes = new Map(); // userId -> startTime
 
+// Configuration: Roles that cannot join giveaways
+const EXCLUDED_GIVEAWAY_ROLES = ['bot', 'bots', 'muted', 'banned', 'restricted', 'excluded'];
+
 // --- Logging Function ---
 async function logActivity(title, message, color = 'Blue') {
   const logChannelId = process.env.LOG_CHANNEL_ID;
@@ -850,9 +853,8 @@ client.on('interactionCreate', async interaction => {
         }
 
         // Check if user has excluded roles
-        const excludedRoleNames = ['bot', 'bots', 'muted', 'banned', 'restricted', 'excluded'];
         const userRoles = interaction.member.roles.cache.map(role => role.name.toLowerCase());
-        const hasExcludedRole = userRoles.some(roleName => excludedRoleNames.includes(roleName));
+        const hasExcludedRole = userRoles.some(roleName => EXCLUDED_GIVEAWAY_ROLES.includes(roleName));
         
         if (hasExcludedRole) {
           return interaction.editReply({ 
