@@ -452,15 +452,15 @@ client.on('interactionCreate', async interaction => {
           streak = 1;
         }
 
-        // Cap the streak at 20 and calculate reward (5 + streak, max 25)
-        const cappedStreak = Math.min(streak, 20);
+        // Cap the streak at 15 and calculate reward (5 + streak, max 20)
+        const cappedStreak = Math.min(streak, 15);
         const reward = 5 + cappedStreak;
 
         await db.query('UPDATE users SET balance = balance + $1, last_daily = $2, daily_streak = $3 WHERE id = $4', [reward, todayStr, streak, userId]);
 
         const replyEmbed = new EmbedBuilder()
           .setTitle('🎉 Daily Reward Claimed! 🎉')
-          .setDescription(`You have received **${reward}** 💰!\nYour current streak is **${streak}** day(s).${streak >= 20 ? '\n\n🏆 **Maximum streak reached!** You are earning the maximum daily reward!' : ' Come back tomorrow to increase it!'}`)
+          .setDescription(`You have received **${reward}** 💰!\nYour current streak is **${streak}** day(s).${streak >= 15 ? '\n\n🏆 **Maximum streak reached!** You are earning the maximum daily reward!' : ' Come back tomorrow to increase it!'}`)
           .setColor('Gold');
         await interaction.editReply({ embeds: [replyEmbed] });
         logActivity('🎁 Daily Reward', `<@${userId}> claimed their daily reward of **${reward}** 💰 (Streak: ${streak}).`, 'Aqua');
