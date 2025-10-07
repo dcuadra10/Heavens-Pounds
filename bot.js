@@ -849,6 +849,17 @@ client.on('interactionCreate', async interaction => {
           });
         }
 
+        // Check if user has excluded roles
+        const excludedRoleNames = ['bot', 'bots', 'muted', 'banned', 'restricted', 'excluded'];
+        const userRoles = interaction.member.roles.cache.map(role => role.name.toLowerCase());
+        const hasExcludedRole = userRoles.some(roleName => excludedRoleNames.includes(roleName));
+        
+        if (hasExcludedRole) {
+          return interaction.editReply({ 
+            content: `❌ You cannot join this giveaway due to your current roles. Please contact an administrator if you believe this is an error.`
+          });
+        }
+
         // Deduct entry cost from user and add to pool
         await db.query('UPDATE users SET balance = balance - $1 WHERE id = $2', [giveaway.entry_cost, interaction.user.id]);
         await db.query('UPDATE server_stats SET pool_balance = pool_balance + $1 WHERE id = $2', [giveaway.entry_cost, interaction.guildId]);
