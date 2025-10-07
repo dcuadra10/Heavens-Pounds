@@ -1078,6 +1078,33 @@ async function endGiveaway(giveawayId) {
       await db.query('UPDATE users SET balance = balance + $1 WHERE id = $2', [prizePerWinner, winnerId]);
     }
 
+    // Send ephemeral congratulations to each winner
+    const giveawayChannel = await client.channels.fetch(giveaway.channel_id);
+    if (giveawayChannel) {
+      for (const winnerId of winners) {
+        try {
+          const winnerEmbed = new EmbedBuilder()
+            .setTitle('🎉 Congratulations! You Won! 🎉')
+            .setDescription(`**🎁 You won the giveaway!**\n\n**💰 Prize Received:** ${prizePerWinner.toLocaleString('en-US')} 💰\n**🏆 Total Winners:** ${winners.length}\n**👥 Total Participants:** ${participants.length}\n\nYour prize has been added to your balance! Enjoy your winnings! 🎊`)
+            .setColor('Gold')
+            .setFooter({ text: `Giveaway ID: ${giveawayId}` })
+            .setTimestamp();
+
+          // Try to send ephemeral message to the winner
+          const winner = await client.users.fetch(winnerId);
+          if (winner) {
+            await winner.send({ 
+              content: `🎉 **Congratulations!** You won the giveaway in <#${giveawayChannel.id}>! 🎊`,
+              embeds: [winnerEmbed] 
+            });
+          }
+        } catch (error) {
+          console.log(`Could not send DM to winner ${winnerId}:`, error.message);
+          // If DM fails, we'll continue with other winners
+        }
+      }
+    }
+
     // Update giveaway as ended
     await db.query('UPDATE giveaways SET ended = TRUE, winners = $1 WHERE id = $2', [winners, giveawayId]);
 
