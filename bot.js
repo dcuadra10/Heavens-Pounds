@@ -939,10 +939,16 @@ async function updateGiveawayEmbed(giveawayId, participantCount) {
 
     // Create updated embed
     const prizePerWinner = Math.floor((giveaway.total_prize || giveaway.entry_cost * giveaway.winner_count) / giveaway.winner_count);
+    
+    // Check if there are enough participants and set appropriate color/warning
+    const hasEnoughParticipants = participantCount >= giveaway.winner_count;
+    const embedColor = hasEnoughParticipants ? 'Gold' : 'Orange';
+    const warningText = !hasEnoughParticipants ? `\n\n⚠️ **Warning:** Need at least ${giveaway.winner_count} participants! (Currently: ${participantCount})` : '';
+    
     const updatedEmbed = new EmbedBuilder()
       .setTitle('🎉 Giveaway! 🎉')
-      .setDescription(`**Total Prize:** ${(giveaway.total_prize || giveaway.entry_cost * giveaway.winner_count).toLocaleString('en-US')} 💰\n**Prize per Winner:** ${prizePerWinner.toLocaleString('en-US')} 💰\n**Entry Cost:** ${giveaway.entry_cost.toLocaleString('en-US')} 💰\n**Participants:** ${participantCount}\n**Winners:** ${giveaway.winner_count}\n**Ends:** <t:${Math.floor(new Date(giveaway.end_time).getTime() / 1000)}:R>`)
-      .setColor('Gold')
+      .setDescription(`**Total Prize:** ${(giveaway.total_prize || giveaway.entry_cost * giveaway.winner_count).toLocaleString('en-US')} 💰\n**Prize per Winner:** ${prizePerWinner.toLocaleString('en-US')} 💰\n**Entry Cost:** ${giveaway.entry_cost.toLocaleString('en-US')} 💰\n**Participants:** ${participantCount}\n**Winners:** ${giveaway.winner_count}\n**Ends:** <t:${Math.floor(new Date(giveaway.end_time).getTime() / 1000)}:R>${warningText}`)
+      .setColor(embedColor)
       .setFooter({ text: `Giveaway ID: ${giveawayId}` })
       .setTimestamp();
 
@@ -1027,6 +1033,37 @@ async function endGiveaway(giveawayId) {
           .setTimestamp();
         await channel.send({ embeds: [embed] });
       }
+      return;
+    }
+
+    // Check if there are enough participants for the number of winners
+    if (participants.length < giveaway.winner_count) {
+      // Not enough participants - cancel giveaway and refund everyone
+      for (const participantId of participants) {
+        await db.query('INSERT INTO users (id) VALUES ($1) ON CONFLICT (id) DO NOTHING', [participantId]);
+        await db.query('UPDATE users SET balance = balance + $1 WHERE id = $2', [giveaway.entry_cost, participantId]);
+      }
+
+      // Return the prize amount to pool
+      const totalPrize = giveaway.total_prize || giveaway.entry_cost * giveaway.winner_count;
+      await db.query('UPDATE server_stats SET pool_balance = pool_balance + $1 WHERE id = $2', [totalPrize, giveaway.guild_id]);
+
+      // Mark giveaway as ended
+      await db.query('UPDATE giveaways SET ended = TRUE WHERE id = $1', [giveawayId]);
+
+      // Send cancellation message
+      const channel = await client.channels.fetch(giveaway.channel_id);
+      if (channel) {
+        const embed = new EmbedBuilder()
+          .setTitle('❌ Giveaway Cancelled')
+          .setDescription(`**Reason:** Not enough participants!\n**Participants:** ${participants.length}\n**Required Winners:** ${giveaway.winner_count}\n\nAll participants have been refunded their entry cost (${giveaway.entry_cost.toLocaleString('en-US')} 💰 each).\nThe prize amount (${totalPrize.toLocaleString('en-US')} 💰) has been returned to the server pool.`)
+          .setColor('Red')
+          .setFooter({ text: `Giveaway ID: ${giveawayId}` })
+          .setTimestamp();
+        await channel.send({ embeds: [embed] });
+      }
+
+      logActivity('❌ Giveaway Cancelled', `Giveaway **${totalPrize.toLocaleString('en-US')} 💰** cancelled due to insufficient participants (${participants.length}/${giveaway.winner_count}). All participants refunded.`, 'Red');
       return;
     }
 
