@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "builds": [
+    { "src": "server.js", "use": "@vercel/node" },
+    { "src": "public/**", "use": "@vercel/static" }
+  ],
+  "routes": [
+    { "src": "/api/(.*)", "dest": "server.js" },
+    { "src": "/(.*)", "dest": "public/$1" }
+  ],
+  "env": {
+    "DISCORD_TOKEN": "@discord_token",
+    "GUILD_ID": "@guild_id",
+    "BOT_API_URL": "@bot_api_url"
+  }
+}

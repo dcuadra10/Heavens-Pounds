@@ -1,0 +1,23 @@
+# Koyeb Service Configuration
+name: heavenly-pounds-bot
+services:
+  - name: heavenly-pounds-bot
+    source:
+      type: git
+      repository: your-github-username/heavenly-pounds
+      branch: main
+    build:
+      type: dockerfile
+      dockerfile_path: Dockerfile
+    run:
+      command: npm start
+      port: 8080
+    env:
+      - name: NODE_ENV
+        value: production
+      - name: PORT
+        value: "8080"
+    regions:
+      - fra
+    instance_types:
+      - nano

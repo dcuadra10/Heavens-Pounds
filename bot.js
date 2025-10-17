@@ -905,6 +905,66 @@ app.get('/', (req, res) => {
   res.send('Heavenly Pounds bot is alive!');
 });
 
+// API endpoint to get real-time Discord server stats
+app.get('/api/guild-info', async (req, res) => {
+  try {
+    // Enable CORS for Vercel
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Methods', 'GET');
+    res.header('Access-Control-Allow-Headers', 'Content-Type');
+    
+    if (!client.isReady()) {
+      return res.status(503).json({ 
+        error: 'Bot not ready', 
+        serverName: 'Heavens of Glory',
+        status: 'Offline',
+        totalMembers: 0,
+        onlineMembers: 0,
+        notes: 'Bot is starting up...'
+      });
+    }
+
+    const guildId = process.env.GUILD_ID;
+    if (!guildId) {
+      return res.status(500).json({ error: 'Guild ID not configured' });
+    }
+
+    const guild = await client.guilds.fetch(guildId);
+    if (!guild) {
+      return res.status(404).json({ error: 'Guild not found' });
+    }
+
+    // Fetch all members to count online status
+    const members = await guild.members.fetch();
+    const onlineCount = members.filter(m => 
+      !m.user.bot && 
+      ['online', 'dnd', 'idle'].includes(m.presence?.status)
+    ).size;
+
+    const totalMembers = guild.memberCount;
+
+    res.json({
+      serverName: guild.name,
+      status: 'Online',
+      totalMembers: totalMembers,
+      onlineMembers: onlineCount,
+      notes: `Serving ${totalMembers} members`
+    });
+
+  } catch (error) {
+    console.error('[API /guild-info] Error:', error.message);
+    res.status(500).json({ 
+      error: 'Failed to fetch guild info', 
+      details: error.message,
+      serverName: 'Heavens of Glory',
+      status: 'Error',
+      totalMembers: 0,
+      onlineMembers: 0,
+      notes: 'Unable to fetch server data'
+    });
+  }
+});
+
 app.listen(port, () => console.log(`Health check server listening on port ${port}`));
 
 // --- Healthchecks.io Ping ---

@@ -1,0 +1,323 @@
+body {
+  margin: 0;
+  padding: 0;
+  background-color: #1c1c1c;
+  color: #f0f0f0;
+  font-family: 'Segoe UI', sans-serif;
+}
+
+.main {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 60px 20px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.hero h1 {
+  font-size: 4.5em;
+  margin-bottom: 10px;
+  text-align: center;
+  font-weight: 700;
+}
+
+.subtitle {
+  font-size: 1.4em;
+  color: #aaa;
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+.tags {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 30px;
+  flex-wrap: wrap;
+}
+
+.tags span {
+  background-color: #2a2a2a;
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 0.9em;
+  font-weight: 600;
+  color: #ccc;
+  border: 1px solid #333;
+  /* Efecto de transición para el hover */
+  transition: transform 0.2s ease-in-out, border-color 0.2s ease-in-out;
+}
+
+.launch {
+  font-size: 1.1em;
+  color: #777;
+  margin-bottom: 50px;
+}
+
+.countdown {
+  display: flex;
+  justify-content: center;
+  gap: 30px;
+  margin-bottom: 60px;
+  flex-wrap: wrap;
+}
+
+.countdown-box {
+  background-color: #2a2a2a;
+  padding: 40px;
+  border-radius: 12px;
+  width: 160px;
+  text-align: center;
+  box-shadow: 0 0 20px rgba(255, 255, 255, 0.04);
+  /* Efecto de transición para el hover */
+  transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+}
+
+.countdown-box span {
+  font-size: 3.2em;
+  font-weight: bold;
+  display: block;
+}
+
+.countdown-box label {
+  font-size: 1em;
+  color: #aaa;
+  margin-top: 10px;
+}
+
+.panels {
+  display: flex;
+  justify-content: center;
+  gap: 25px;
+  margin-bottom: 40px;
+  flex-wrap: wrap;
+}
+
+.panel.small {
+  background-color: #2a2a2a;
+  padding: 20px;
+  border-radius: 10px;
+  width: 220px;
+  text-align: center;
+  box-shadow: 0 0 15px rgba(255, 255, 255, 0.04);
+  /* Efecto de transición para el hover */
+  transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+}
+
+.panel.small h2 {
+  font-size: 1.2em;
+  margin-bottom: 8px;
+}
+
+.panel.small p {
+  font-size: 0.95em;
+  color: #ccc;
+}
+
+.discord {
+  margin: 20px 0; /* antes era 40px, ahora más compacto */
+}
+
+.discord-button {
+  display: inline-block;
+  padding: 16px 32px;
+  background-color: #5865F2;
+  color: white;
+  text-decoration: none;
+  border-radius: 30px;
+  font-weight: bold;
+  font-size: 1.1em;
+  transition: background-color 0.3s;
+}
+
+.discord-button:hover {
+  background-color: #6a74f9;
+}
+
+.bottom-panels {
+  display: flex;
+  justify-content: center;
+  gap: 30px;
+  margin-bottom: 60px;
+  flex-wrap: wrap;
+}
+
+.bottom-panel {
+  background-color: #2a2a2a;
+  padding: 20px;
+  border-radius: 10px;
+  width: 525px;         /* más ancho */
+  height: 250px;         /* altura automática */
+  min-height: 100px;    /* menos alto que antes */
+  text-align: center;
+  box-shadow: 0 0 20px rgba(255, 255, 255, 0.04);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  /* Efecto de transición para el hover */
+  transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+}
+
+.contact-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  
+}
+
+.contact-list {
+  display: flex;
+  flex-direction: row;
+  gap: 12px;
+  margin: 20px 0 10px 0; /* antes era 20px abajo, ahora solo 10px */;
+  align-items: center;
+}
+
+/* Contact buttons: gray with green dot */
+.contact-button {
+  background-color: #2a2a2a;
+  color: #f0f0f0;
+  padding: 12px 24px;
+  border-radius: 30px;
+  font-weight: bold;
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  transition: background-color 0.3s;
+  box-shadow: 0 0 10px rgba(0, 255, 0, 0.05);
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+
+}
+
+.contact-button:hover {
+  background-color: #6a74f9;
+}
+
+/* Green dot */
+.contact-button::before {
+  content: "";
+  width: 10px;
+  height: 10px;
+  background-color: #00ff00;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.contact-note {
+  font-size: 0.9em;
+  color: #aaa;
+  margin-top: 10px;
+}
+
+footer {
+  margin-top: 60px;
+  font-size: 0.9em;
+  color: #777;
+  text-align: center;
+}
+
+.launch {
+  text-align: center;
+}
+.contact-block h2 {
+  font-size: 1.4em;
+  margin-bottom: 6px; /* antes era más grande, ahora más compacto */
+}
+
+.contact-block h5 {
+  font-size: 1em;
+  color: #ccc;
+  font-weight: 500;
+  margin-top: 4px;     /* reduce el espacio entre h2 y h5 */
+  margin-bottom: 10px;
+  text-align: center;
+}
+
+/* --- EFECTOS HOVER --- */
+
+/* Hover para los bloques principales */
+.countdown-box:hover,
+.panel.small:hover,
+.bottom-panel:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 8px 25px rgba(255, 255, 255, 0.08);
+}
+
+/* Hover para las etiquetas */
+.tags span:hover {
+  transform: scale(1.05);
+  border-color: #777;
+}
+
+
+/* --- MEDIA QUERIES --- */
+@media (max-width: 768px) {
+  .main {
+    padding: 40px 16px;
+  }
+
+  .hero h1 {
+    font-size: 2.8em;
+  }
+
+  .subtitle {
+    font-size: 1.2em;
+  }
+
+  .tags {
+    gap: 8px;
+  }
+
+  .countdown {
+    gap: 16px;
+  }
+
+  .countdown-box {
+    width: 120px;
+    padding: 30px;
+  }
+
+  .countdown-box span {
+    font-size: 2.4em;
+  }
+
+  .panels {
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .panel.small {
+    width: 100%;
+  }
+
+  .discord-button {
+    width: 100%;
+    text-align: center;
+  }
+
+  .bottom-panels {
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .bottom-panel {
+    width: 100%;
+    min-height: 120px;
+    padding: 16px;
+  }
+
+  .contact-list {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .contact-button {
+    width: 100%;
+    justify-content: center;
+  }
+}
